@@ -1,0 +1,22 @@
+node_modules/
+.next/
+out/
+build/
+dist/
+*.db
+*.db-shm
+*.db-wal
+*.tar
+*.gz
+*.zip
+.env
+.env.local
+.env.production
+Hermes TTS/
+SSH keys/
+google-services.json
+sidekick-a57aa*.json
+balmy-metrics*.json
+mini-services/
+bun.lock
+components.json
