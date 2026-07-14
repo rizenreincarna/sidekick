@@ -1,0 +1,98 @@
+{
+  "bills": [
+    {
+      "id": "mara",
+      "name": "MARA Student Loan",
+      "amount": 150,
+      "due_day": 15,
+      "reminder_day": 25,
+      "notes": "Monthly"
+    },
+    {
+      "id": "akpk",
+      "name": "AKPK",
+      "amount": 1250,
+      "due_day": 15,
+      "reminder_day": 25,
+      "notes": "Monthly"
+    },
+    {
+      "id": "water_filter",
+      "name": "Water Filter",
+      "amount": 60,
+      "due_day": 15,
+      "reminder_day": 25,
+      "notes": "Monthly"
+    },
+    {
+      "id": "internet_bsp",
+      "name": "Internet Bill (BSP)",
+      "amount": 104.95,
+      "due_day": 15,
+      "reminder_day": 25,
+      "notes": "Monthly"
+    },
+    {
+      "id": "internet_klang",
+      "name": "Internet Bill (Klang)",
+      "amount": 30,
+      "due_day": 15,
+      "reminder_day": 25,
+      "notes": "Monthly"
+    },
+    {
+      "id": "electric",
+      "name": "Electric Bill (TNB)",
+      "amount": null,
+      "due_day": 15,
+      "reminder_day": 25,
+      "notes": "Check TNB app for amount"
+    },
+    {
+      "id": "water",
+      "name": "Water Bill (BSP21)",
+      "amount": null,
+      "due_day": 15,
+      "reminder_day": 25,
+      "notes": "Check BSP21 management for amount"
+    },
+    {
+      "id": "rent",
+      "name": "House Rent",
+      "amount": 1300,
+      "due_day": 15,
+      "reminder_day": 25,
+      "notes": "Pay to Mr Sazali (landlord)"
+    },
+    {
+      "id": "nafkah",
+      "name": "Wife Nafkah",
+      "amount": 1000,
+      "due_day": 15,
+      "reminder_day": 25,
+      "notes": "RM250/week — paid monthly or weekly"
+    },
+    {
+      "id": "shopee_loan",
+      "name": "Shopee Loan",
+      "amount": 121,
+      "due_day": 15,
+      "reminder_day": 25,
+      "notes": "Until October 2026 only"
+    },
+    {
+      "id": "lg_appliances",
+      "name": "LG Washing Machine & Fridge",
+      "amount": 240,
+      "due_day": 15,
+      "reminder_day": 25,
+      "notes": "Monthly installment"
+    }
+  ],
+  "payment_history": [
+    {"date": "2026-07-09", "bill": "House Rent", "amount": 1300, "note": "Paid to Mr Sazali"},
+    {"date": "2026-07-09", "bill": "Internet (BSP)", "amount": 110, "note": "YES internet bill — same as BSP"},
+    {"date": "2026-07-09", "bill": "Wife Nafkah", "amount": 250, "note": "RM250 of RM1,000"},
+    {"date": "2026-07-09", "bill": "Shopee Loan", "amount": 121, "note": "Paid via Mayah"}
+  ]
+}

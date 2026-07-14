@@ -1,0 +1,44 @@
+[
+  {
+    "type": "payment",
+    "amount": 42,
+    "note": "25887 Denai Alam",
+    "seq": 1
+  },
+  {
+    "type": "payment",
+    "amount": 24,
+    "note": "25878 Shah Alam",
+    "seq": 2
+  },
+  {
+    "type": "payment",
+    "amount": 30,
+    "note": "25895 KL",
+    "seq": 3
+  },
+  {
+    "type": "payment",
+    "amount": 61,
+    "note": "25896 KL",
+    "seq": 4
+  },
+  {
+    "type": "payment",
+    "amount": 65,
+    "note": "25898 PJ",
+    "seq": 5
+  },
+  {
+    "type": "payment",
+    "amount": 150,
+    "note": "25834 KL",
+    "seq": 6
+  },
+  {
+    "type": "payment",
+    "amount": 15,
+    "note": "25884 KL",
+    "seq": 7
+  }
+]

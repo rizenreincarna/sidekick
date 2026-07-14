@@ -1,0 +1,62 @@
+[
+  {
+    "type": "payment",
+    "amount": 65,
+    "note": "25913 Klang",
+    "seq": 1
+  },
+  {
+    "type": "payment",
+    "amount": 66,
+    "note": "25910 Kapar",
+    "seq": 2
+  },
+  {
+    "type": "payment",
+    "amount": 15,
+    "note": "25916",
+    "seq": 3
+  },
+  {
+    "type": "payment",
+    "amount": 40,
+    "note": "25912 Kuala Lumpur",
+    "seq": 4
+  },
+  {
+    "type": "payment",
+    "amount": 15,
+    "note": "25915 Kuala Lumpur",
+    "seq": 5
+  },
+  {
+    "type": "advance",
+    "amount": 250,
+    "note": "Nafkah July",
+    "seq": 6
+  },
+  {
+    "type": "advance",
+    "amount": 121,
+    "note": "Shopee loan Jul (via Mayah)",
+    "seq": 7
+  },
+  {
+    "type": "advance",
+    "amount": 200,
+    "note": "Pay Mayah debt",
+    "seq": 8
+  },
+  {
+    "type": "advance",
+    "amount": 110,
+    "note": "Internet (BSP)",
+    "seq": 9
+  },
+  {
+    "type": "advance",
+    "amount": 1300,
+    "note": "House rent Jul",
+    "seq": 10
+  }
+]

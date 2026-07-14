@@ -1,0 +1,14 @@
+# Build outputs
+.gradle/
+build/
+*.iml
+.idea/
+local.properties
+
+# Signing & secrets (NEVER commit)
+keystore.properties
+sidekick-release.jks
+app/google-services.json
+
+# Generated
+gen-icons.js

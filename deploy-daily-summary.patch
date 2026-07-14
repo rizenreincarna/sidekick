@@ -1,0 +1,149 @@
+diff --git a/src/app/api/ai/daily-summary/route.ts b/src/app/api/ai/daily-summary/route.ts
+index 33db711..6a41a55 100644
+--- a/src/app/api/ai/daily-summary/route.ts
++++ b/src/app/api/ai/daily-summary/route.ts
+@@ -24,7 +24,7 @@ export async function GET() {
+       return formatDateMYT(mytNow);
+     })();
+ 
+-    // Get today's orders
++    // Get today's orders (full details for route/agenda)
+     const todayOrders = await db.order.findMany({
+       where: { userId: user.id, scheduledDate: today },
+     });
+@@ -48,6 +48,7 @@ export async function GET() {
+       pendingOrders: pendingOrders.length,
+       scheduledOrders: scheduledOrders.length,
+       totalPoints,
++      maxDailyPoints: 20,
+       ordersWithNotes: ordersWithNotes.map(o => ({
+         orderId: o.orderId,
+         customerName: o.customerName,
+@@ -55,6 +56,21 @@ export async function GET() {
+         scheduledDate: o.scheduledDate,
+         status: o.status,
+       })),
++      todaySchedule: todayOrders.map(o => ({
++        orderId: o.orderId,
++        customerName: o.customerName,
++        address: o.address,
++        city: o.city,
++        zone: o.zone,
++        size: o.size,
++        points: o.points,
++        isOffice: o.isOffice,
++        isEvent: o.isEvent,
++        isErthbox: o.isErthbox,
++        scheduledDate: o.scheduledDate || "",
++        status: o.status,
++        notes: o.notes,
++      })),
+       tomorrowSchedule: tomorrowOrders.map(o => ({
+         orderId: o.orderId,
+         customerName: o.customerName,
+diff --git a/src/lib/deepseek.ts b/src/lib/deepseek.ts
+index cb9f912..0ca7011 100644
+--- a/src/lib/deepseek.ts
++++ b/src/lib/deepseek.ts
+@@ -23,6 +23,7 @@ export interface DailySummaryData {
+   pendingOrders: number;
+   scheduledOrders: number;
+   totalPoints: number;
++  maxDailyPoints: number;
+   ordersWithNotes: Array<{
+     orderId: string;
+     customerName: string;
+@@ -30,6 +31,21 @@ export interface DailySummaryData {
+     scheduledDate: string | null;
+     status: string;
+   }>;
++  todaySchedule: Array<{
++    orderId: string;
++    customerName: string;
++    address: string;
++    city: string;
++    zone: number;
++    size: string;
++    points: number;
++    isOffice: boolean;
++    isEvent: boolean;
++    isErthbox: boolean;
++    scheduledDate: string;
++    status: string;
++    notes: string | null;
++  }>;
+   tomorrowSchedule: Array<{
+     orderId: string;
+     customerName: string;
+@@ -425,29 +441,57 @@ export async function generateDailySummary(data: DailySummaryData): Promise<stri
+     .map(o => `- #${o.orderId} ${o.customerName} at ${o.address}, ${o.city}${o.notes ? ` (Note: ${o.notes})` : ""}`)
+     .join("\n");
+ 
++  // Build today's agenda with full details (route order, notes, advisories)
++  const todayList = data.todaySchedule
++    .map(o => {
++      let label = `- #${o.orderId}`;
++      if (o.isErthbox) label += " 📦ERTHBOX";
++      if (o.isEvent) label += ` 🎪${"EVENT"}`;
++      label += ` ${o.customerName} — ${o.address}, ${o.city} (Z${o.zone})`;
++      label += ` | ${o.size}=${o.points}pt`;
++      if (o.isOffice) label += " | OFFICE";
++      label += ` | ${o.status}`;
++      if (o.notes) label += `\n    💬 ${o.notes}`;
++      return label;
++    })
++    .join("\n");
++
++  const todayCount = data.todaySchedule.length;
++  const todayPts = data.todaySchedule.reduce((s, o) => s + o.points, 0);
++  const completed = data.todaySchedule.filter(o => o.status === "COMPLETED").length;
++  const remaining = todayCount - completed;
++
+   const messages: ChatMessage[] = [
+     {
+       role: "user",
+-      content: `Generate a friendly daily summary for Hero ${data.heroName}.
++      content: `Generate a daily briefing for Hero ${data.heroName}. This is the "Summary" button — the user wants to know TODAY'S AGENDA: what they're doing today, in what order, what to remember, and anything that could disrupt their schedule (time-window restrictions, box replacements, no-bulky-fee notes, roadblocks, traffic, lunch blackouts, etc).
+ 
+-Today's stats:
+-- Total orders: ${data.totalOrders}
+-- Completed: ${data.completedOrders}
+-- Pending: ${data.pendingOrders}
+-- Scheduled: ${data.scheduledOrders}
+-- Points earned today: ${data.totalPoints}
++=== TODAY'S AGENDA (${todayCount} orders, ${todayPts}/${data.maxDailyPoints} pts) ===
++${todayList || "No orders scheduled today."}
+ 
+-Orders with notes that may need attention:
++=== TODAY'S ORDER NOTES / REMINDERS ===
+ ${orderNotesList || "No orders with special notes today."}
+ 
+-Tomorrow's schedule:
++=== TODAY'S PROGRESS ===
++Completed: ${data.completedOrders}/${data.totalOrders}
++Remaining: ${remaining} order(s) still to do
++Pending (unscheduled): ${data.pendingOrders}
++Points earned today: ${data.totalPoints}/${data.maxDailyPoints}
++
++=== TOMORROW'S PREVIEW ===
+ ${tomorrowList || "No orders scheduled for tomorrow."}
+ 
+-Please provide:
+-1. A brief encouraging summary of today
+-2. Highlight any orders with notes that need attention or reminders
+-3. Preview of tomorrow's schedule with any preparation tips
+-4. Keep it friendly and professional, like a helpful colleague`,
++Produce the briefing with these sections (use clear headers and bullet points):
++1. **Today's Agenda** — list today's orders in a SUGGESTED route order (group by area/city to minimize travel; mention high-rise condos vs commercial so the Hero can pack light). Mark completed ones with ✓ and remaining ones clearly.
++2. **Notes & Reminders** — surface every order note that needs action today (no bulky fee, no-delivery time windows, box replacements, special handling, etc). Quote the note text.
++3. **Schedule Watch** — flag anything that affects timing: delivery blackout windows (e.g. no deliveries 12:30–2PM), office-only constraints, points cap proximity, and remind the Hero to plan lunch/traffic around them. If you have no live traffic/roadblock data, do NOT invent roadblocks — instead say "No traffic/roadblock data available; check Waze/Google Maps before heading out."
++4. **Tomorrow's Preview** — short preview of tomorrow with prep tips.
++
++Rules:
++- Be friendly but practical — like a dispatch partner briefing a courier.
++- Today is the PRIORITY. Do not bury today's agenda behind tomorrow's preview.
++- Use the notes text VERBATIM where it matters (e.g. "no bulky fee", "no deliveries 12:30–2PM", "box replacement").
++- Keep emojis to max 2 total. No preambles like "Sure!" or "Here's your summary:".`,
+     },
+   ];
+ 

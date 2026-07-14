@@ -1,0 +1,26 @@
+[
+  {
+    "type": "payment",
+    "amount": 16.0,
+    "note": "Order 25819",
+    "seq": 1
+  },
+  {
+    "type": "payment",
+    "amount": 20.0,
+    "note": "Order 25812",
+    "seq": 2
+  },
+  {
+    "type": "received",
+    "amount": 35.0,
+    "note": "Order 25847",
+    "seq": 3
+  },
+  {
+    "type": "payment",
+    "amount": 70.0,
+    "note": "Order 25804",
+    "seq": 4
+  }
+]

@@ -1,0 +1,80 @@
+[
+  {
+    "type": "payment",
+    "amount": 70,
+    "note": "Booking 25778",
+    "seq": 1
+  },
+  {
+    "type": "payment",
+    "amount": 74,
+    "note": "Booking 25743",
+    "seq": 2
+  },
+  {
+    "type": "payment",
+    "amount": 100,
+    "note": "",
+    "seq": 3
+  },
+  {
+    "type": "received",
+    "amount": 35,
+    "note": "",
+    "seq": 4
+  },
+  {
+    "type": "payment",
+    "amount": 10,
+    "note": "",
+    "seq": 5
+  },
+  {
+    "type": "payment",
+    "amount": 17,
+    "note": "",
+    "seq": 6
+  },
+  {
+    "type": "payment",
+    "amount": 10,
+    "note": "",
+    "seq": 7
+  },
+  {
+    "type": "payment",
+    "amount": 27,
+    "note": "",
+    "seq": 8
+  },
+  {
+    "type": "payment",
+    "amount": 32,
+    "note": "",
+    "seq": 9
+  },
+  {
+    "type": "payment",
+    "amount": 25,
+    "note": "",
+    "seq": 10
+  },
+  {
+    "type": "payment",
+    "amount": 15,
+    "note": "",
+    "seq": 11
+  },
+  {
+    "type": "received",
+    "amount": 35,
+    "note": "",
+    "seq": 12
+  },
+  {
+    "type": "payment",
+    "amount": 44,
+    "note": "",
+    "seq": 13
+  }
+]

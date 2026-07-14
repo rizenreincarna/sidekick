@@ -1,0 +1,288 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  HERO
+  SUPPORT
+}
+
+model User {
+  id              String      @id @default(cuid())
+  username        String      @unique
+  password        String      // bcrypt hashed
+  displayName     String?
+  role            Role        @default(HERO)
+  isActive        Boolean     @default(true)
+  isApproved      Boolean     @default(false)
+  twoFactorEnabled Boolean    @default(false)
+  twoFactorSecret String?     // TOTP secret (encrypted base32)
+  lastLoginAt     DateTime?   // Last login timestamp
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  orders          Order[]
+  holidays        Holiday[]
+  offDays         OffDay[]
+  settings        Setting[]
+  zoneConfigs     ZoneConfig[]
+  userZones       UserZone[]
+  sosRequests     SOSRequest[]
+  sosAnswered     SOSRequest[] @relation("AnsweredSOS")
+  auditLogs       AuditLog[]
+  notifications   Notification[]
+  chatMessages    ChatMessage[]
+  aiConversations AiConversation[]
+  aiActions       AiAction[]
+  aiFlags         AiFlag[]
+  erthboxLocations ErthboxLocation[]
+}
+
+model Order {
+  id               String   @id @default(cuid())
+  orderId          String
+  customerName     String
+  phone            String
+  address          String
+  city             String
+  size             String   // S, M, L
+  points           Int      // 1-12
+  zone             Int      // 1-14 built-in, 100+ custom zones
+  isOffice         Boolean  @default(false)
+  isEvent          Boolean  @default(false)
+  eventType        String?  // ROADSHOW, EWASTE_COLLECTION, OTHER
+  isErthbox        Boolean  @default(false)
+  erthboxLocationId String? // Reference to ErthboxLocation
+  status           String   @default("PENDING") // PENDING, SCHEDULED, CONFIRMED, BOOKED, COMPLETED
+  scheduledDate    String?  // YYYY-MM-DD
+  notes            String?
+  latitude         Float?
+  longitude        Float?
+  addressVerified  Boolean  @default(false)
+  addressVerificationNote String? // AI verification details
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  erthboxLocation  ErthboxLocation? @relation(fields: [erthboxLocationId], references: [id], onDelete: SetNull)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([userId, orderId])
+  @@index([userId, status])
+  @@index([userId, scheduledDate])
+  @@index([status])
+  @@index([userId, createdAt])
+  @@index([isErthbox])
+  @@index([erthboxLocationId])
+}
+
+model Holiday {
+  id     String @id @default(cuid())
+  date   String // YYYY-MM-DD
+  name   String
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId, date])
+}
+
+model OffDay {
+  id     String @id @default(cuid())
+  date   String // YYYY-MM-DD
+  reason String?
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId, date])
+}
+
+model Setting {
+  id     String @id @default(cuid())
+  key    String
+  value  String
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key])
+}
+
+model ZoneConfig {
+  id         String  @id @default(cuid())
+  zone       Int
+  area       String
+  isExcluded Boolean @default(false)
+  userId     String
+  user       User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, zone, area])
+}
+
+model UserZone {
+  id        String   @id @default(cuid())
+  zoneId    Int      // Zone number: built-in zone ID for overrides, or >= 100 for custom zones
+  name      String   // Zone name (custom name for new zones, or override for built-in)
+  region    String   // State/region this zone belongs to
+  isCustom  Boolean  @default(false) // true = user-created zone, false = built-in zone override
+  isEnabled Boolean  @default(true)
+  areas     String   @default("[]") // JSON array of area strings for custom zones
+  order     Int      @default(0)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, zoneId])
+}
+
+model SOSRequest {
+  id          String   @id @default(cuid())
+  orderId     String
+  orderRef    String   // The original Order.orderId for display
+  customerName String
+  phone       String
+  address     String
+  city        String
+  size        String
+  points      Int
+  zone        Int
+  isOffice    Boolean  @default(false)
+  notes       String?  // Original order notes
+  sosNote     String   // Reason for SOS - required
+  status      String   @default("ACTIVE") // ACTIVE, ANSWERED, CANCELLED
+  fromUserId  String
+  fromUser    User     @relation(fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUserId    String?
+  toUser      User?    @relation("AnsweredSOS", fields: [toUserId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status])
+  @@index([fromUserId])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action    String   // CREATE, UPDATE, DELETE, SOS_CREATE, SOS_ANSWER, LOGIN, etc.
+  entity    String   // Order, User, Setting, ZoneConfig, SOSRequest, etc.
+  entityId  String?  // ID of the affected entity
+  details   String?  // JSON string with change details
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([action, entity])
+  @@index([createdAt])
+}
+
+model Notification {
+  id         String   @id @default(cuid())
+  userId     String   // Target user
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type       String   // "system" or "normal"
+  title      String
+  message    String
+  isRead     Boolean  @default(false)
+  actionUrl  String?  // Optional URL to navigate to
+  createdAt  DateTime @default(now())
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  message   String
+  mentions  String   @default("[]") // JSON array of mentioned userIds
+  isDeleted Boolean  @default(false)
+  deletedBy String?  // Admin who deleted
+  createdAt DateTime @default(now())
+
+  @@index([isDeleted, createdAt])
+}
+
+// ============ ERTHBOX LOCATIONS ============
+
+model ErthboxLocation {
+  id          String   @id @default(cuid())
+  name        String   // Location name (e.g. "IKEA Damansara", "1 Utama Mall")
+  address     String   // Full address
+  city        String   // City/area for zone detection
+  picName     String   // Person in Charge name
+  picPhone    String   // Person in Charge phone number
+  notes       String?  // Notes like "mall area, cannot enter between 12PM-2PM"
+  isActive    Boolean  @default(true) // Soft delete / disable
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders      Order[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ============ AI ASSISTANT ============
+
+model AiConversation {
+  id        String      @id @default(cuid())
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String      @default("New Chat")
+  isArchived Boolean    @default(false)
+  messages  AiMessage[]
+  actions   AiAction[]
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+}
+
+model AiMessage {
+  id             String   @id @default(cuid())
+  conversationId String
+  conversation   AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String   // "user", "assistant", "system"
+  content        String
+  metadata       String?  // JSON: extra info like tokens used, model, etc.
+  createdAt      DateTime @default(now())
+
+  @@index([conversationId])
+}
+
+model AiAction {
+  id             String   @id @default(cuid())
+  conversationId String
+  conversation   AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  actionType     String   // "UPDATE_ORDER", "ADD_NOTE", "CHANGE_STATUS", "CREATE_ORDER", "ADD_ZONE_AREA"
+  entityType     String   // "Order" or "ZoneConfig"
+  entityId       String   // Order ID or zone number
+  description    String   // Human-readable description of what the AI wants to do
+  payload        String   // JSON: the actual changes to apply
+  status         String   @default("PENDING") // PENDING, APPROVED, REJECTED, APPLIED
+  reviewedBy     String?  // User ID who approved/rejected
+  reviewedAt     DateTime?
+  createdAt      DateTime @default(now())
+
+  @@index([conversationId])
+  @@index([userId, status])
+}
+
+model AiFlag {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversationId String?
+  messageContent  String   // The flagged message from the user
+  reason      String   // AI's reason for flagging
+  severity    String   @default("MEDIUM") // LOW, MEDIUM, HIGH, CRITICAL
+  isResolved  Boolean  @default(false)
+  resolvedBy  String?  // Admin who resolved
+  resolvedAt  DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([isResolved])
+}

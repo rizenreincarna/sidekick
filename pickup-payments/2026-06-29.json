@@ -1,0 +1,32 @@
+[
+  {
+    "type": "payment",
+    "amount": 30,
+    "note": "25761 Shah Alam",
+    "seq": 1
+  },
+  {
+    "type": "payment",
+    "amount": 40,
+    "note": "25792 Petaling Jaya",
+    "seq": 2
+  },
+  {
+    "type": "payment",
+    "amount": 35,
+    "note": "25738 Kuala Lumpur",
+    "seq": 3
+  },
+  {
+    "type": "payment",
+    "amount": 823.3,
+    "note": "25727 Kuala Lumpur",
+    "seq": 4
+  },
+  {
+    "type": "payment",
+    "amount": 80.0,
+    "note": "25760 Cheras",
+    "seq": 5
+  }
+]

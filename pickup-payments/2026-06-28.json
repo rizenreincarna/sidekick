@@ -1,0 +1,44 @@
+[
+  {
+    "type": "payment",
+    "amount": 46,
+    "note": "25746 Subang Jaya",
+    "seq": 1
+  },
+  {
+    "type": "payment",
+    "amount": 72,
+    "note": "25772 Petaling Jaya",
+    "seq": 2
+  },
+  {
+    "type": "payment",
+    "amount": 125,
+    "note": "25747 Petaling Jaya",
+    "seq": 3
+  },
+  {
+    "type": "payment",
+    "amount": 42,
+    "note": "25716 Petaling Jaya",
+    "seq": 4
+  },
+  {
+    "type": "payment",
+    "amount": 20,
+    "note": "25775 Shah Alam",
+    "seq": 5
+  },
+  {
+    "type": "received",
+    "amount": 35,
+    "note": "25767 Klang",
+    "seq": 6
+  },
+  {
+    "type": "payment",
+    "amount": 37,
+    "note": "25677 Shah Alam",
+    "seq": 7
+  }
+]
