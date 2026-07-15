@@ -5,7 +5,7 @@ object Constants {
     // Defaults to erthsidekick.xyz which follows DNS after cutover.
     // For pre-DNS testing on new VPS, pass:
     //   ./gradlew assembleRelease -PBASE_URL=https://NEW_VPS_IP:3001
-    const val WEBAPP_URL = "https://erthsidekick.xyz"
+    const val WEBAPP_URL = "https://sidekick.rizen.space"
 
     // Notification channels
     const val CHANNEL_ORDERS = "orders"
