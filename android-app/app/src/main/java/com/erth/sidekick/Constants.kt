@@ -1,6 +1,10 @@
 package com.erth.sidekick
 
 object Constants {
+    // Base URL — override via BuildConfig.BASE_URL at build time.
+    // Defaults to erthsidekick.xyz which follows DNS after cutover.
+    // For pre-DNS testing on new VPS, pass:
+    //   ./gradlew assembleRelease -PBASE_URL=https://NEW_VPS_IP:3001
     const val WEBAPP_URL = "https://erthsidekick.xyz"
 
     // Notification channels
