@@ -1,7 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <!-- The live site is HTTPS; allow it. No cleartext permitted. -->
+    <!-- Production: HTTPS only. No cleartext traffic permitted. -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+    <!-- Tailscale LAN access (100.64.0.0/10) — Chatterbox server on PC.
+         Still HTTPS-only; this just allows private network cert chains if needed. -->
     <domain-config cleartextTrafficPermitted="false">
-        <domain includeSubdomains="true">erthsidekick.xyz</domain>
+        <domain includeSubdomains="false">100.68.146.27</domain>
+        <domain includeSubdomains="false">work.rizen.space</domain>
+        <domain includeSubdomains="false">sidekick.rizen.space</domain>
+        <domain includeSubdomains="false">ntfy.erthsidekick.xyz</domain>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
     </domain-config>
 </network-security-config>

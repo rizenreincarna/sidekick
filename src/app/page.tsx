@@ -7716,6 +7716,20 @@ export default function HomePage() {
               <LogOut className="h-4 w-4" />
               <span className="text-xs hidden xs:inline">Logout</span>
             </Button>
+            {/* Route Optimizer link */}
+            <a href="/route">
+              <Button variant="outline" size="sm" className="shrink-0 gap-1 border-white/10 bg-white/5 hover:bg-white/10 hover:text-primary h-9 px-2.5">
+                <Route className="h-4 w-4" />
+                <span className="text-xs hidden xs:inline">Route</span>
+              </Button>
+            </a>
+            {/* Voice Lab link */}
+            <a href="http://100.68.146.27:8880/voice-lab" target="_blank" rel="noopener noreferrer">
+              <Button variant="outline" size="sm" className="shrink-0 gap-1 border-white/10 bg-white/5 hover:bg-white/10 hover:text-primary h-9 px-2.5">
+                <Sparkles className="h-4 w-4" />
+                <span className="text-xs hidden xs:inline">Voice Lab</span>
+              </Button>
+            </a>
         </div>
       </header>
 

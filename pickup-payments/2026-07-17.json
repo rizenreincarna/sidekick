@@ -1,0 +1,26 @@
+[
+  {
+    "type": "payment",
+    "amount": 0,
+    "note": "Order 25888",
+    "seq": 1
+  },
+  {
+    "type": "payment",
+    "amount": 10,
+    "note": "Order 25955",
+    "seq": 2
+  },
+  {
+    "type": "received",
+    "amount": 50,
+    "note": "Scrap sale",
+    "seq": 3
+  },
+  {
+    "type": "advance",
+    "amount": 521,
+    "note": "Paid Mayah - RM250 nafkah + RM271 debt repayment",
+    "seq": 4
+  }
+]

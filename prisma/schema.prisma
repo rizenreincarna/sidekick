@@ -41,6 +41,41 @@ model User {
   aiActions       AiAction[]
   aiFlags         AiFlag[]
   erthboxLocations ErthboxLocation[]
+  routes          Route[]
+  deviceTokens    DeviceToken[]
+}
+
+model Route {
+  id            String   @id @default(cuid())
+  date          String
+  userId        String
+  vehicleId     Int
+  routeData     String
+  idMapping     String   // JSON blob of intId → orderId mapping
+  totalDistance Float
+  totalDuration Int
+  stopCount     Int
+  status        String   @default("OPTIMIZED")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId, date])
+}
+
+model DeviceToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String
+  platform  String   @default("android")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, token])
+  @@index([userId, isActive])
 }
 
 model Order {

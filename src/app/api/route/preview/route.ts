@@ -1,0 +1,49 @@
+import { NextRequest, NextResponse } from "next/server";
+import { db } from "@/lib/db";
+import { requireAuth } from "@/lib/session";
+import type { OptimizedRouteResult } from "@/lib/vroom";
+
+// GET /api/route/preview?date=YYYY-MM-DD — Returns the saved route for a date.
+export async function GET(request: NextRequest) {
+  const user = await requireAuth();
+  if (!user)
+    return NextResponse.json(
+      { error: "Your session has expired. Please sign in again." },
+      { status: 401 }
+    );
+
+  try {
+    const { searchParams } = new URL(request.url);
+    const date = searchParams.get("date");
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date))
+      return NextResponse.json({ error: "A valid date (YYYY-MM-DD) is required." }, { status: 400 });
+
+    const isPrivileged = user.role === "ADMIN" || user.role === "SUPPORT";
+    const userIdParam = searchParams.get("userId");
+    const targetUserId = isPrivileged && userIdParam ? userIdParam : user.id;
+
+    const route = await db.route.findUnique({
+      where: { userId_date: { userId: targetUserId, date } },
+    });
+
+    if (!route) return NextResponse.json({ route: null });
+
+    return NextResponse.json({
+      route: {
+        id: route.id,
+        date: route.date,
+        vehicleId: route.vehicleId,
+        totalDistance: route.totalDistance,
+        totalDuration: route.totalDuration,
+        stopCount: route.stopCount,
+        status: route.status,
+        createdAt: route.createdAt,
+        routeData: JSON.parse(route.routeData) as OptimizedRouteResult,
+        idMapping: JSON.parse(route.idMapping),
+      },
+    });
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : "Unknown error";
+    return NextResponse.json({ error: `Failed to load route: ${msg}` }, { status: 500 });
+  }
+}

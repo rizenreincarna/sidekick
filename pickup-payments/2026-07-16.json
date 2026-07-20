@@ -1,0 +1,14 @@
+[
+  {
+    "type": "payment",
+    "amount": 30,
+    "note": "Order 25963 pickup payment",
+    "seq": 1
+  },
+  {
+    "type": "payment",
+    "amount": 26,
+    "note": "Order 25997 pickup payment",
+    "seq": 2
+  }
+]

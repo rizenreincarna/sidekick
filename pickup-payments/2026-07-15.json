@@ -1,0 +1,38 @@
+[
+  {
+    "type": "payment",
+    "amount": 54,
+    "note": "25987 Subang Jaya",
+    "seq": 1
+  },
+  {
+    "type": "payment",
+    "amount": 70,
+    "note": "25974 Puchong",
+    "seq": 2
+  },
+  {
+    "type": "payment",
+    "amount": 96,
+    "note": "25951 Seri Kembangan",
+    "seq": 3
+  },
+  {
+    "type": "payment",
+    "amount": 30,
+    "note": "26003 KL",
+    "seq": 4
+  },
+  {
+    "type": "payment",
+    "amount": 40,
+    "note": "25962 Petaling Jaya",
+    "seq": 5
+  },
+  {
+    "type": "payment",
+    "amount": 70,
+    "note": "26006 Jalan PJU 1A/46",
+    "seq": 6
+  }
+]

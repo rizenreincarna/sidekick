@@ -1,0 +1,14 @@
+[
+  {
+    "type": "payment",
+    "amount": -35,
+    "note": "26038 - Bukit Semenyih",
+    "seq": 1
+  },
+  {
+    "type": "payment",
+    "amount": 48,
+    "note": "26022 - Kajang Mewah 10",
+    "seq": 2
+  }
+]

@@ -2,35 +2,37 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- WebView needs internet -->
+    <!-- Network -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- Microphone for voice agent -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <!-- Push notifications (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- Foreground service for notification polling fallback -->
+    <!-- Foreground service for ntfy + Live Mode -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
 
-    <!-- Boot receiver so polling service can restart after reboot -->
+    <!-- Boot receiver so ntfy service restarts after reboot -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!-- Vibrate for notifications -->
     <uses-permission android:name="android.permission.VIBRATE" />
 
-    <!-- Camera: allow taking photos directly when uploading to AI chat -->
-    <uses-permission android:name="android.permission.CAMERA" />
-    <uses-feature android:name="android.hardware.camera" android:required="false" />
-
     <application
-        android:name=".SidekickApp"
+        android:name=".RizenApp"
         android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Sidekick"
+        android:theme="@style/Theme.RizenCC"
         android:usesCleartextTraffic="false"
         android:networkSecurityConfig="@xml/network_security_config"
         tools:targetApi="31">
@@ -40,40 +42,26 @@
             android:exported="true"
             android:configChanges="orientation|screenSize|keyboardHidden|screenLayout"
             android:launchMode="singleTop"
-            android:theme="@style/Theme.Sidekick.Splash">
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.RizenCC.Splash">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
 
-        <!-- Foreground service: polls notifications when app is backgrounded (FCM fallback) -->
+        <!-- ntfy notification service: NOT exported (internal only) -->
         <service
-            android:name=".NotificationPollService"
-            android:enabled="true"
+            android:name=".service.NtfyNotificationService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
-        <!-- Firebase Messaging Service -->
-        <service
-            android:name=".SidekickFirebaseMessagingService"
-            android:enabled="true"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="com.google.firebase.MESSAGING_EVENT" />
-            </intent-filter>
-        </service>
-
-        <!-- Boot receiver: restart poll service after reboot -->
-        <receiver
-            android:name=".BootReceiver"
-            android:enabled="true"
-            android:exported="true">
+        <!-- Boot receiver: NOT exported — system still delivers BOOT_COMPLETED since API 26 -->
+        <receiver android:name=".service.BootReceiver" android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
 
     </application>
-
 </manifest>

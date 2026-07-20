@@ -11,5 +11,14 @@
       "shopee_loan",
       "lg_appliances"
     ]
+  },
+  "2026-07": {
+    "paid": [
+      "nafkah",
+      "internet_bsp",
+      "shopee_loan",
+      "rent",
+      "water"
+    ]
   }
 }

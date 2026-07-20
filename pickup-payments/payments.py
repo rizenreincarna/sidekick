@@ -8,7 +8,7 @@ Usage:
   python3 payments.py list [2026-06-26]
 """
 
-import json, sys, os, subprocess
+import json, sys, os, subprocess, re
 from datetime import date
 from pathlib import Path
 
@@ -48,6 +48,26 @@ def _save(d: str, entries: list):
 
 def cmd_add(day: str, entry_type: str, amount: int, note: str = ""):
     entries = _load(day)
+    # — Duplicate guard: same note + same amount, OR same order ID in note
+    order_id = None
+    match = re.search(r'(?:Order\s+)?(\d{5,})', note)
+    if match:
+        order_id = match.group(1)
+    for e in entries:
+        # Exact match: type + amount + note all identical
+        if e["type"] == entry_type and e["amount"] == amount and e["note"] == note:
+            print(f"⚠️  Duplicate detected: {entry_type} RM{amount} with note '{note}' already logged (seq {e['seq']})")
+            print(f"   Skipped — no new entry added.")
+            return
+        # Order-ID match: same order number appears in a different note format
+        e_order_id = None
+        e_match = re.search(r'(?:Order\s+)?(\d{5,})', e.get("note", ""))
+        if e_match:
+            e_order_id = e_match.group(1)
+        if order_id and e_order_id and order_id == e_order_id and e["type"] == entry_type:
+            print(f"⚠️  Duplicate order detected: Order {order_id} already logged (seq {e['seq']}, note: '{e['note']}')")
+            print(f"   Skipped — no new entry added.")
+            return
     entries.append({
         "type": entry_type,   # "payment", "received", "advance"
         "amount": amount,

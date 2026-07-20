@@ -12,6 +12,15 @@
 		}
 	}
 
+	# Voice Lab proxy — routes /voice-lab through VPS to Chatterbox on PC
+	handle /voice-lab* {
+		reverse_proxy http://100.68.146.27:8880 {
+			header_up Host {host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+		}
+	}
+
 	handle {
 		reverse_proxy localhost:3000 {
 			header_up Host {host}

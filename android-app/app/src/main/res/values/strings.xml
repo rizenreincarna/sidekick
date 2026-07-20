@@ -1,23 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">HERO Sidekick</string>
-    <string name="webapp_url">https://erthsidekick.xyz</string>
-
-    <!-- Notification channels -->
-    <string name="channel_orders">Orders</string>
-    <string name="channel_orders_desc">New orders assigned to you</string>
-    <string name="channel_sos">SOS Requests</string>
-    <string name="channel_sos_desc">Urgent SOS pickup requests</string>
-    <string name="channel_system">System Alerts</string>
-    <string name="channel_system_desc">Important system notifications</string>
-    <string name="channel_chat">Chat Messages</string>
-    <string name="channel_chat_desc">AI chat and admin messages</string>
-
-    <!-- Foreground service -->
-    <string name="poll_channel">Background Sync</string>
-    <string name="poll_channel_desc">Keeps notifications synced in the background</string>
-    <string name="poll_notification_title">HERO Sidekick</string>
-    <string name="poll_notification_text">Monitoring for new pickups and alerts</string>
-
-    <string name="permission_rationale">Notifications permission is needed to alert you about new orders, SOS requests, and messages.</string>
+    <string name="app_name">RizenCC</string>
+    <string name="ntfy_channel_orders">Orders</string>
+    <string name="ntfy_channel_sos">SOS Alerts</string>
+    <string name="ntfy_channel_system">System</string>
+    <string name="ntfy_channel_chat">Chat</string>
+    <string name="ntfy_channel_voice">Voice Agent</string>
+    <string name="ntfy_channel_poll">Poll</string>
 </resources>
