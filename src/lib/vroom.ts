@@ -4,16 +4,16 @@
 // ============================================================================
 // CAPACITY-RESET STRATEGY (documented per PI_CODER_PROMPT.md requirement)
 // ============================================================================
-// The vehicle capacity is 80 points per load. DROP_A (ERTH HQ, Cyberjaya) and
+// The vehicle capacity is 20 points per load (Isuzu D-Max max load). DROP_A (ERTH HQ, Cyberjaya) and
 // DROP_B (Section 51A, PJ) are unloading waypoints where accumulated e-waste is
 // emptied, resetting the load. VROOM has no native "unload" primitive, so we
 // use the **Guard-rail + per-load multi-vehicle** strategy (prompt Option 3 +
 // Option 1 combined):
 //
 //   1. Each order is assigned a drop-off (DROP_A or DROP_B) via assignDropOff.
-//   2. Orders are grouped by drop-off, then chunked into "loads" of <=80 points
+//   2. Orders are grouped by drop-off, then chunked into "loads" of <=20 points
 //      each (sorted by zone for geographic coherence).
-//   3. Each load becomes ONE VROOM vehicle: start=HOME, end=HOME, capacity=80.
+//   3. Each load becomes ONE VROOM vehicle: start=HOME, end=HOME, capacity=20.
 //      VROOM optimizes all vehicles in a single problem simultaneously.
 //   4. The drop-off waypoint is NOT a VROOM job (it has no pickup amount and
 //      would be visited anywhere). Instead, after VROOM returns the optimized
@@ -21,7 +21,7 @@
 //      post-processing (`stitchDropOffs`), and the extra travel time is added
 //      from the distance matrix / haversine fallback.
 //
-// This keeps a single VROOM call, respects the 80-pt capacity per vehicle, and
+// This keeps a single VROOM call, respects the 20-pt capacity per vehicle, and
 // produces a stitched daily plan with drop-offs at the end of each load.
 //
 // ============================================================================
@@ -287,11 +287,14 @@ export interface LoadPartition {
 export function buildLoadPartition(
   orders: VroomOrderInput[],
   date: string,
-  idMapping: IdMapping[]
+  idMapping: IdMapping[],
+  homeOverride?: { latitude: number; longitude: number }
 ): LoadPartition {
   const prepared = prepareOrders(orders);
   const [twStart, twEnd] = buildTimeWindow(date);
-  const home: [number, number] = [FIXED_LOCATIONS.HOME.longitude, FIXED_LOCATIONS.HOME.latitude];
+  const home: [number, number] = homeOverride
+    ? [homeOverride.longitude, homeOverride.latitude]
+    : [FIXED_LOCATIONS.HOME.longitude, FIXED_LOCATIONS.HOME.latitude];
   const serviceSec = VEHICLE.serviceTimePickup * 60;
 
   const loads = splitIntoLoads(prepared, VEHICLE.capacity);
@@ -577,7 +580,8 @@ export function stitchSolution(
   solution: VroomSolution,
   orders: VroomOrderInput[],
   idMapping: IdMapping[],
-  date: string
+  date: string,
+  homeOverride?: { latitude: number; longitude: number }
 ): OptimizedRouteResult {
   const ordersByDbId = new Map(orders.map((o) => [o.id, o]));
   const loads: VroomLoadPlan[] = [];
@@ -589,10 +593,9 @@ export function stitchSolution(
     const dropOff = determineRouteDropOff(r, ordersByDbId, idMapping);
     const dropLoc = dropOff === "DROP_B" ? FIXED_LOCATIONS.DROP_B : FIXED_LOCATIONS.DROP_A;
     const dropCoord: [number, number] = [dropLoc.longitude, dropLoc.latitude];
-    const homeCoord: [number, number] = [
-      FIXED_LOCATIONS.HOME.longitude,
-      FIXED_LOCATIONS.HOME.latitude,
-    ];
+    const homeCoord: [number, number] = homeOverride
+      ? [homeOverride.longitude, homeOverride.latitude]
+      : [FIXED_LOCATIONS.HOME.longitude, FIXED_LOCATIONS.HOME.latitude];
     const stops: VroomStopDetail[] = [];
     let cumLoad = 0;
     let lastLoc = homeCoord;
@@ -703,17 +706,18 @@ function determineRouteDropOff(
 
 export async function optimizeRouteForDate(
   orders: VroomOrderInput[],
-  date: string
+  date: string,
+  homeOverride?: { latitude: number; longitude: number }
 ): Promise<OptimizedRouteResult> {
   const geocoded = orders.filter((o) => o.latitude != null && o.longitude != null);
   const idMapping = buildIdMappings(geocoded);
-  const partition = buildLoadPartition(geocoded, date, idMapping);
+  const partition = buildLoadPartition(geocoded, date, idMapping, homeOverride);
   const problem: VroomProblem = { vehicles: partition.vehicles, jobs: partition.jobs, options: { g: true } };
 
   // Try the VROOM server first (it assigns jobs across vehicles itself)
   const vroomSol = await solveVroomProblem(problem);
   if (vroomSol) {
-    return stitchSolution(vroomSol, geocoded, idMapping, date);
+    return stitchSolution(vroomSol, geocoded, idMapping, date, homeOverride);
   }
 
   // Fallback: nearest-neighbour in-process solver, partitioned per vehicle so
@@ -724,7 +728,7 @@ export async function optimizeRouteForDate(
     coordsByIntId.set(m.intId, [o.longitude!, o.latitude!]);
   }
   const nnSol = solveNearestNeighbor(problem, coordsByIntId, partition.vehicleJobs);
-  const result = stitchSolution(nnSol, geocoded, idMapping, date);
+  const result = stitchSolution(nnSol, geocoded, idMapping, date, homeOverride);
   result.source = "nearest-neighbor";
   return result;
 }

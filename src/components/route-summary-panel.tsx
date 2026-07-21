@@ -1,13 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import type { OptimizedRouteResult, VroomStopDetail, VroomLoadPlan } from "@/lib/vroom";
 import { fmtMalaysiaTime, resolveIntId } from "@/lib/vroom";
 import { FIXED_LOCATIONS, VEHICLE } from "@/lib/route-model";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Save, Play, MapPin, Home, ChevronDown, ChevronRight } from "lucide-react";
+import { Save, Play, MapPin, Home, ChevronDown, ChevronRight, Navigation, MessageCircle, CheckCircle2, RotateCcw } from "lucide-react";
 
 interface Props {
   route: OptimizedRouteResult;
@@ -17,6 +17,14 @@ interface Props {
   onSaveRoute?: () => void;
   saving?: boolean;
   routeStatus?: string;
+  trackingTokens?: Record<string, { token: string; completed: boolean }>;
+  routeDate?: string;
+  onMarkComplete?: (orderId: string, token: string) => void;
+  onUndoComplete?: (orderId: string, token: string) => void;
+}
+
+function gmapsNavUrl(lat: number, lon: number): string {
+  return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`;
 }
 
 function fmtDuration(sec: number): string {
@@ -38,8 +46,25 @@ export default function RouteSummaryPanel({
   onSaveRoute,
   saving,
   routeStatus,
+  trackingTokens,
+  routeDate,
+  onMarkComplete,
+  onUndoComplete,
 }: Props) {
   const [openLoad, setOpenLoad] = useState<number | null>(0);
+  const [now, setNow] = useState(Date.now());
+
+  // Live clock — updates every 60 seconds for countdown calculations
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Helper: calculate minutes from now to a unix-seconds arrival time
+  const minsUntilArrival = (arrivalSec: number) => {
+    const diff = Math.round((arrivalSec * 1000 - now) / 60000);
+    return diff;
+  };
 
   const stats = useMemo(() => {
     return {
@@ -124,6 +149,11 @@ export default function RouteSummaryPanel({
             onToggle={() => setOpenLoad(openLoad === li ? null : li)}
             selectedOrderId={selectedOrderId}
             onSelectStop={onSelectStop}
+            trackingTokens={trackingTokens}
+            routeDate={routeDate}
+            onMarkComplete={onMarkComplete}
+            onUndoComplete={onUndoComplete}
+            now={now}
           />
         ))}
 
@@ -145,11 +175,11 @@ export default function RouteSummaryPanel({
         {/* Fixed locations legend */}
         <div className="mt-4 pt-3">
           <Separator className="mb-3 bg-white/10" />
-          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <p className="mb-2 text-[0.625rem] font-semibold uppercase tracking-wider text-muted-foreground">
             Legend
           </p>
           <ul className="space-y-1.5 text-xs text-muted-foreground">
-            <LegendItem color="#22c55e" label={`${FIXED_LOCATIONS.HOME.name} (start/end)`} />
+            <LegendItem color="#22c55e" label="Home (start/end)" />
             <LegendItem color="#ef4444" label={`${FIXED_LOCATIONS.DROP_A.name} (drop-off)`} />
             <LegendItem color="#f97316" label={`${FIXED_LOCATIONS.DROP_B.name} (drop-off)`} />
             <li className="text-muted-foreground/70">Pin height ∝ e-waste points · color ∝ zone</li>
@@ -163,7 +193,7 @@ export default function RouteSummaryPanel({
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2">
-      <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+      <div className="text-[0.625rem] font-medium uppercase tracking-wider text-muted-foreground">
         {label}
       </div>
       <div className="mt-0.5 text-sm font-semibold text-foreground">{value}</div>
@@ -187,6 +217,11 @@ function LoadBlock({
   onToggle,
   selectedOrderId,
   onSelectStop,
+  trackingTokens,
+  routeDate,
+  onMarkComplete,
+  onUndoComplete,
+  now,
 }: {
   load: VroomLoadPlan;
   index: number;
@@ -194,8 +229,14 @@ function LoadBlock({
   onToggle: () => void;
   selectedOrderId: string | null;
   onSelectStop: (stop: VroomStopDetail) => void;
+  trackingTokens?: Record<string, { token: string; completed: boolean }>;
+  routeDate?: string;
+  onMarkComplete?: (orderId: string, token: string) => void;
+  onUndoComplete?: (orderId: string, token: string) => void;
+  now?: number;
 }) {
   const drop = load.dropOff === "DROP_B" ? FIXED_LOCATIONS.DROP_B : FIXED_LOCATIONS.DROP_A;
+  const minsUntil = (arrivalSec: number) => now ? Math.round((arrivalSec * 1000 - now) / 60000) : null;
   return (
     <div className="mb-3 overflow-hidden rounded-lg border border-white/10 bg-white/5">
       <button
@@ -219,39 +260,124 @@ function LoadBlock({
           <ol>
             {load.stops.map((s, i) => {
               const selected = s.orderId === selectedOrderId;
+              const tracking = trackingTokens?.[s.orderId];
+              const trackUrl = tracking
+                ? `${typeof window !== "undefined" ? window.location.origin : ""}/track/${tracking.token}`
+                : null;
+              const waMsg = trackUrl
+                ? `Hi ${s.customerName}, your e-waste pickup is scheduled for ${routeDate || ""}. Track your driver live here: ${trackUrl}`
+                : null;
+              const waUrl = waMsg
+                ? s.phone
+                  ? `https://wa.me/${s.phone.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(waMsg)}`
+                  : `https://wa.me/?text=${encodeURIComponent(waMsg)}`
+                : null;
               return (
                 <li key={s.orderDbId}>
-                  <button
-                    onClick={() => onSelectStop(s)}
+                  <div
                     className={`flex w-full items-start gap-2.5 px-3 py-2.5 text-left text-xs transition-colors hover:bg-white/5 ${
                       selected ? "bg-primary/15 ring-1 ring-inset ring-primary/40" : ""
-                    }`}
+                    } ${tracking?.completed ? "opacity-60" : ""}`}
                   >
-                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/20 text-[10px] font-bold text-primary">
-                      {i + 1}
-                    </span>
-                    <span className="flex-1 min-w-0">
-                      <span className="block truncate font-medium text-foreground">
-                        {s.customerName}{" "}
-                        <span className="text-muted-foreground">· {s.orderId}</span>
+                    <button
+                      onClick={() => onSelectStop(s)}
+                      className="flex flex-1 items-start gap-2.5 text-left"
+                    >
+                      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/20 text-[0.625rem] font-bold text-primary">
+                        {i + 1}
                       </span>
-                      <span className="mt-0.5 block text-muted-foreground">
-                        ETA {fmtMalaysiaTime(s.arrival)} · {s.points} pts · zone {s.zone}
-                        {s.isOffice ? " · office" : ""}
+                      <span className="flex-1 min-w-0">
+                        <span className="block truncate font-medium text-foreground">
+                          {s.customerName}{" "}
+                          <span className="text-muted-foreground">· {s.orderId}</span>
+                        </span>
+                        <span className="mt-0.5 block text-muted-foreground">
+                          ETA {fmtMalaysiaTime(s.arrival)}
+                          {(() => {
+                            const mins = minsUntil(s.arrival);
+                            if (mins === null) return null;
+                            if (mins < 0) return <span className="text-amber-400"> · {Math.abs(mins)}min overdue</span>;
+                            if (mins === 0) return <span className="text-emerald-400"> · arriving now</span>;
+                            return <span className="text-primary/70"> · in {mins}min</span>;
+                          })()}
+                          · {s.points} pts · zone {s.zone}
+                          {s.isOffice ? " · office" : ""}
+                        </span>
+                        {tracking?.completed && (
+                          <span className="mt-0.5 block text-emerald-400">
+                            ✓ Pickup done
+                          </span>
+                        )}
                       </span>
-                    </span>
-                  </button>
+                    </button>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <a
+                        href={gmapsNavUrl(s.latitude, s.longitude)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={`Navigate to ${s.customerName}`}
+                        className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-white/10 bg-white/5 text-primary transition-colors hover:bg-primary/20 hover:border-primary/40"
+                      >
+                        <Navigation className="h-3.5 w-3.5" />
+                      </a>
+                      {waUrl && !tracking?.completed && (
+                        <a
+                          href={waUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title={`Send tracking link to ${s.customerName} via WhatsApp`}
+                          className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-emerald-500/20 bg-emerald-500/10 text-emerald-400 transition-colors hover:bg-emerald-500/20"
+                        >
+                          <MessageCircle className="h-3.5 w-3.5" />
+                        </a>
+                      )}
+                      {tracking && !tracking.completed && onMarkComplete && (
+                        <button
+                          onClick={() => onMarkComplete(s.orderId, tracking.token)}
+                          title={`Mark ${s.customerName} as picked up`}
+                          className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-white/10 bg-white/5 text-emerald-400 transition-colors hover:bg-emerald-500/20 hover:border-emerald-500/40"
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                      {tracking?.completed && onUndoComplete && (
+                        <button
+                          onClick={() => onUndoComplete(s.orderId, tracking.token)}
+                          title={`Undo — mark ${s.customerName} as not picked up`}
+                          className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-amber-500/20 bg-amber-500/10 text-amber-400 transition-colors hover:bg-amber-500/20 hover:border-amber-500/40"
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                      {tracking?.completed && !onUndoComplete && (
+                        <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center text-emerald-400">
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </li>
               );
             })}
           </ol>
           <div className="space-y-1.5 border-t border-white/10 px-3 py-2.5 text-xs text-muted-foreground">
-            <div className="flex items-center gap-2">
-              <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-red-500" />
-              <span className="flex items-center gap-1">
-                <MapPin className="h-3 w-3" /> Drop-off: {drop.name} @{" "}
-                {fmtMalaysiaTime(load.dropOffArrival)}
+            <div className="flex items-center justify-between gap-2">
+              <span className="flex items-center gap-2">
+                <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-red-500" />
+                <span className="flex items-center gap-1">
+                  <MapPin className="h-3 w-3" /> Drop-off: {drop.name} @{" "}
+                  {fmtMalaysiaTime(load.dropOffArrival)}
+                </span>
               </span>
+              <a
+                href={gmapsNavUrl(drop.latitude, drop.longitude)}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={`Navigate to ${drop.name}`}
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-white/10 bg-white/5 text-primary transition-colors hover:bg-primary/20 hover:border-primary/40"
+              >
+                <Navigation className="h-3.5 w-3.5" />
+              </a>
             </div>
             <div className="flex items-center gap-2">
               <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-green-500" />

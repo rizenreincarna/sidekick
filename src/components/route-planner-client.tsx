@@ -31,6 +31,9 @@ export default function RoutePlannerClient() {
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [routeStatus, setRouteStatus] = useState<string>("OPTIMIZED");
   const [panelOpen, setPanelOpen] = useState(true);
+  const [trackingTokens, setTrackingTokens] = useState<Record<string, { token: string; completed: boolean }>>({});
+  const [heroProfile, setHeroProfile] = useState<{ heroName: string; plateNumber: string; vehicleColor: string; vehicleModel: string; homeLatitude?: number | null; homeLongitude?: number | null } | null>(null);
+  const [driverPosition, setDriverPosition] = useState<{ latitude: number; longitude: number } | null>(null);
 
   // Load any saved route for the selected date
   const loadSaved = useCallback(async (d: string) => {
@@ -41,14 +44,48 @@ export default function RoutePlannerClient() {
         if (data.route) {
           setRoute(data.route.routeData);
           setRouteStatus(data.route.status);
+          // Pre-fetch map tiles for the route area (fire-and-forget)
+          const rd = data.route.routeData;
+          if (rd?.loads?.length) {
+            const allStops = rd.loads.flatMap((l) => l.stops);
+            const lats = allStops.map((s) => s.latitude).filter(Boolean);
+            const lons = allStops.map((s) => s.longitude).filter(Boolean);
+            if (lats.length && lons.length) {
+              fetch("/api/tile/prefetch", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  minLat: Math.min(...lats) - 0.02,
+                  maxLat: Math.max(...lats) + 0.02,
+                  minLon: Math.min(...lons) - 0.02,
+                  maxLon: Math.max(...lons) + 0.02,
+                }),
+              }).catch(() => {});
+            }
+          }
+          // Load tracking tokens for this date
+          const trackRes = await fetch(`/api/route/track-tokens?date=${d}`, { cache: "no-store" });
+          if (trackRes.ok) {
+            const trackData = await trackRes.json();
+            if (trackData.tokens) setTrackingTokens(trackData.tokens);
+          }
           return;
         }
       }
       setRoute(null);
       setRouteStatus("OPTIMIZED");
+      setTrackingTokens({});
     } catch {
       /* ignore */
     }
+  }, []);
+
+  // Fetch hero profile once
+  useEffect(() => {
+    fetch("/api/hero/profile", { cache: "no-store" })
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => d?.profile ? setHeroProfile(d.profile) : null)
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -71,6 +108,26 @@ export default function RoutePlannerClient() {
       } else {
         setRoute(data.route);
         setRouteStatus("OPTIMIZED");
+        // Pre-fetch map tiles for the route area (fire-and-forget, runs in background)
+        if (data.route?.loads?.length) {
+          const allStops = data.route.loads.flatMap((l) => l.stops);
+          if (allStops.length > 0) {
+            const lats = allStops.map((s) => s.latitude).filter(Boolean);
+            const lons = allStops.map((s) => s.longitude).filter(Boolean);
+            if (lats.length && lons.length) {
+              fetch("/api/tile/prefetch", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  minLat: Math.min(...lats) - 0.02,
+                  maxLat: Math.max(...lats) + 0.02,
+                  minLon: Math.min(...lons) - 0.02,
+                  maxLon: Math.max(...lons) + 0.02,
+                }),
+              }).catch(() => {});
+            }
+          }
+        }
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Network error");
@@ -91,6 +148,14 @@ export default function RoutePlannerClient() {
       const data = await res.json();
       if (res.ok) {
         if (status === "STARTED") setRouteStatus("STARTED");
+        // Store tracking tokens from save response
+        if (data.trackingTokens) {
+          const tokens: Record<string, { token: string; completed: boolean }> = {};
+          for (const t of data.trackingTokens) {
+            tokens[t.orderId] = { token: t.token, completed: false };
+          }
+          setTrackingTokens(tokens);
+        }
       } else {
         setError(data.error || "Save failed");
       }
@@ -99,7 +164,95 @@ export default function RoutePlannerClient() {
     }
   };
 
-  const onSelectStop = (stop: VroomStopDetail) => setSelectedOrderId(stop.orderId);
+  // Send GPS location when route is started
+  useEffect(() => {
+    if (routeStatus !== "STARTED") return;
+    let watchId: number | null = null;
+    const sendLocation = () => {
+      if (!navigator.geolocation) return;
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          fetch("/api/driver/location", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              latitude: pos.coords.latitude,
+              longitude: pos.coords.longitude,
+              heading: pos.coords.heading,
+              speed: pos.coords.speed,
+              routeDate: date,
+            }),
+          }).catch(() => {});
+        },
+        () => {},
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    };
+    // Send immediately + every 60 seconds
+    sendLocation();
+    const interval = setInterval(sendLocation, 60_000);
+    return () => {
+      clearInterval(interval);
+      if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+    };
+  }, [routeStatus, date]);
+
+  // Poll driver GPS position for the 3D map orb (every 10s when route is started)
+  useEffect(() => {
+    if (routeStatus !== "STARTED") return;
+    const fetchLoc = async () => {
+      try {
+        const res = await fetch("/api/driver/location", { cache: "no-store" });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.location) {
+            setDriverPosition({ latitude: data.location.latitude, longitude: data.location.longitude });
+          } else {
+            setDriverPosition(null);
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+    };
+    fetchLoc();
+    const interval = setInterval(fetchLoc, 10_000);
+    return () => clearInterval(interval);
+  }, [routeStatus]);
+
+  // Mark a pickup as complete
+  const markComplete = useCallback(async (orderId: string, token: string) => {
+    try {
+      const res = await fetch(`/api/track/${token}/complete`, { method: "POST" });
+      if (res.ok) {
+        setTrackingTokens((prev) => ({
+          ...prev,
+          [orderId]: { ...prev[orderId], completed: true },
+        }));
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  // Undo a completed pickup
+  const undoComplete = useCallback(async (orderId: string, token: string) => {
+    try {
+      const res = await fetch(`/api/track/${token}/complete`, { method: "DELETE" });
+      if (res.ok) {
+        setTrackingTokens((prev) => ({
+          ...prev,
+          [orderId]: { ...prev[orderId], completed: false },
+        }));
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const onSelectStop = useCallback((stop: VroomStopDetail) => {
+    setSelectedOrderId((prev) => (prev === stop.orderId ? null : stop.orderId));
+  }, []);
 
   return (
     <div className="flex h-dvh flex-col bg-background text-foreground">
@@ -175,6 +328,10 @@ export default function RoutePlannerClient() {
               route={route}
               onSelectStop={onSelectStop}
               selectedOrderId={selectedOrderId}
+              heroProfile={heroProfile}
+              driverPosition={driverPosition}
+              routeStatus={routeStatus}
+              trackingTokens={trackingTokens}
             />
           ) : (
             <div className="flex h-full w-full flex-col items-center justify-center bg-background text-center text-muted-foreground">
@@ -203,6 +360,10 @@ export default function RoutePlannerClient() {
               onStartRoute={() => saveRoute("STARTED")}
               saving={saving}
               routeStatus={routeStatus}
+              trackingTokens={trackingTokens}
+              routeDate={date}
+              onMarkComplete={markComplete}
+              onUndoComplete={undoComplete}
             />
           </aside>
         )}

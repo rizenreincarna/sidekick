@@ -1,40 +1,42 @@
 import { NextRequest, NextResponse } from "next/server";
+import { promises as fs } from "fs";
+import path from "path";
 
-// GET /api/tile/[z]/[x]/[y] — Tile proxy.
+// GET /api/tile/[z]/[x]/[y] — Tile proxy with persistent disk cache.
 //
-// To comply with OSM Tile Usage Policy we do NOT hit tile.openstreetmap.org
-// directly from the client. Instead we proxy through CARTO basemaps (which
-// permit web usage) and forward a proper User-Agent. A tiny in-memory LRU
-// cache keeps repeated tile fetches off the upstream provider.
-//
-// OSM attribution is required and is rendered in the UI overlay.
+// Esri Dark Gray Canvas tiles — dark gray background with clearly visible road
+// network. Tiles are cached in-memory AND on disk so they survive restarts and
+// are served instantly after the first fetch.
+// NOTE: Esri uses {z}/{y}/{x} tile ordering (y before x), NOT {z}/{x}/{y}.
 
 const UPSTREAMS = [
-  "https://cartodb-basemaps-a.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png",
-  "https://cartodb-basemaps-b.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png",
-  "https://cartodb-basemaps-c.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png",
+  "https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
 ];
 
-const cache = new Map<string, { buf: Buffer; ts: number; ct: string }>();
-const CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
-const MAX_CACHE = 600;
+const TILE_CACHE_DIR = path.join(process.cwd(), "tile-cache");
 
-function getCached(key: string) {
-  const e = cache.get(key);
-  if (!e) return undefined;
-  if (Date.now() - e.ts > CACHE_TTL) {
-    cache.delete(key);
-    return undefined;
+// In-memory cache (fastest, but cleared on restart)
+const memCache = new Map<string, { buf: Buffer; ct: string }>();
+const MAX_MEM = 800;
+
+// Disk cache: tiles/{z}/{x}/{y}.png — persistent across restarts
+async function getDiskTile(z: number, x: number, y: number): Promise<Buffer | null> {
+  const fp = path.join(TILE_CACHE_DIR, String(z), String(x), `${y}.png`);
+  try {
+    return await fs.readFile(fp);
+  } catch {
+    return null;
   }
-  return e;
 }
 
-function setCached(key: string, buf: Buffer, ct: string) {
-  if (cache.size >= MAX_CACHE) {
-    const ks = Array.from(cache.keys());
-    for (let i = 0; i < Math.ceil(MAX_CACHE * 0.2); i++) cache.delete(ks[i]);
+async function writeDiskTile(z: number, x: number, y: number, buf: Buffer): Promise<void> {
+  try {
+    const dir = path.join(TILE_CACHE_DIR, String(z), String(x));
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(path.join(dir, `${y}.png`), buf);
+  } catch {
+    // ignore disk errors — memory cache still works
   }
-  cache.set(key, { buf, ts: Date.now(), ct });
 }
 
 export async function GET(
@@ -42,7 +44,6 @@ export async function GET(
   { params }: { params: Promise<{ z: string; x: string; y: string }> }
 ) {
   const { z, x, y } = await params;
-  // y may arrive as "123.png" — strip the extension
   const yClean = y.replace(/\.png$/i, "");
 
   const zi = Number(z);
@@ -53,20 +54,40 @@ export async function GET(
   }
 
   const key = `${z}/${x}/${yClean}`;
-  const hit = getCached(key);
-  if (hit) {
-    return new NextResponse(new Uint8Array(hit.buf), {
+
+  // 1. Check in-memory cache (instant)
+  const memHit = memCache.get(key);
+  if (memHit) {
+    return new NextResponse(new Uint8Array(memHit.buf), {
       headers: {
-        "Content-Type": hit.ct,
+        "Content-Type": memHit.ct,
         "Cache-Control": "public, max-age=604800, immutable",
       },
     });
   }
 
+  // 2. Check disk cache (fast — no network)
+  const diskBuf = await getDiskTile(zi, xi, yi);
+  if (diskBuf) {
+    // Populate memory cache for next time
+    if (memCache.size >= MAX_MEM) {
+      const ks = Array.from(memCache.keys());
+      for (let i = 0; i < Math.ceil(MAX_MEM * 0.2); i++) memCache.delete(ks[i]);
+    }
+    memCache.set(key, { buf: diskBuf, ct: "image/png" });
+    return new NextResponse(new Uint8Array(diskBuf), {
+      headers: {
+        "Content-Type": "image/png",
+        "Cache-Control": "public, max-age=604800, immutable",
+      },
+    });
+  }
+
+  // 3. Fetch from Esri (slow — network round-trip)
   const url = UPSTREAMS[(xi + yi) % UPSTREAMS.length]
     .replace("{z}", z)
-    .replace("{x}", x)
-    .replace("{y}", yClean);
+    .replace("{y}", yClean)
+    .replace("{x}", x);
 
   try {
     const res = await fetch(url, {
@@ -78,7 +99,15 @@ export async function GET(
     }
     const ct = res.headers.get("content-type") || "image/png";
     const buf = Buffer.from(await res.arrayBuffer());
-    setCached(key, buf, ct);
+
+    // Write to both caches
+    if (memCache.size >= MAX_MEM) {
+      const ks = Array.from(memCache.keys());
+      for (let i = 0; i < Math.ceil(MAX_MEM * 0.2); i++) memCache.delete(ks[i]);
+    }
+    memCache.set(key, { buf, ct });
+    writeDiskTile(zi, xi, yi, buf); // async — don't block response
+
     return new NextResponse(new Uint8Array(buf), {
       headers: {
         "Content-Type": ct,

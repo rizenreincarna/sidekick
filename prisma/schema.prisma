@@ -7,42 +7,39 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Role {
-  ADMIN
-  HERO
-  SUPPORT
-}
-
 model User {
-  id              String      @id @default(cuid())
-  username        String      @unique
-  password        String      // bcrypt hashed
-  displayName     String?
-  role            Role        @default(HERO)
-  isActive        Boolean     @default(true)
-  isApproved      Boolean     @default(false)
-  twoFactorEnabled Boolean    @default(false)
-  twoFactorSecret String?     // TOTP secret (encrypted base32)
-  lastLoginAt     DateTime?   // Last login timestamp
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
-  orders          Order[]
-  holidays        Holiday[]
-  offDays         OffDay[]
-  settings        Setting[]
-  zoneConfigs     ZoneConfig[]
-  userZones       UserZone[]
-  sosRequests     SOSRequest[]
-  sosAnswered     SOSRequest[] @relation("AnsweredSOS")
-  auditLogs       AuditLog[]
-  notifications   Notification[]
-  chatMessages    ChatMessage[]
-  aiConversations AiConversation[]
-  aiActions       AiAction[]
-  aiFlags         AiFlag[]
+  id               String            @id @default(cuid())
+  username         String            @unique
+  password         String
+  displayName      String?
+  role             Role              @default("HERO")
+  isActive         Boolean           @default(true)
+  isApproved       Boolean           @default(false)
+  twoFactorEnabled Boolean           @default(false)
+  twoFactorSecret  String?
+  lastLoginAt      DateTime?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  aiActions        AiAction[]
+  aiConversations  AiConversation[]
+  aiFlags          AiFlag[]
+  auditLogs        AuditLog[]
+  chatMessages     ChatMessage[]
+  deviceTokens     DeviceToken[]
+  driverLocations  DriverLocation[]
   erthboxLocations ErthboxLocation[]
-  routes          Route[]
-  deviceTokens    DeviceToken[]
+  heroProfile      HeroProfile?
+  holidays         Holiday[]
+  notifications    Notification[]
+  offDays          OffDay[]
+  orders           Order[]
+  routes           Route[]
+  sosAnswered      SOSRequest[]      @relation("AnsweredSOS")
+  sosRequests      SOSRequest[]
+  settings         Setting[]
+  trackingLinks    TrackingLink[]
+  userZones        UserZone[]
+  zoneConfigs      ZoneConfig[]
 }
 
 model Route {
@@ -51,7 +48,7 @@ model Route {
   userId        String
   vehicleId     Int
   routeData     String
-  idMapping     String   // JSON blob of intId → orderId mapping
+  idMapping     String
   totalDistance Float
   totalDuration Int
   stopCount     Int
@@ -69,9 +66,9 @@ model DeviceToken {
   userId    String
   token     String
   platform  String   @default("android")
-  isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  isActive  Boolean  @default(true)
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, token])
@@ -79,32 +76,32 @@ model DeviceToken {
 }
 
 model Order {
-  id               String   @id @default(cuid())
-  orderId          String
-  customerName     String
-  phone            String
-  address          String
-  city             String
-  size             String   // S, M, L
-  points           Int      // 1-12
-  zone             Int      // 1-14 built-in, 100+ custom zones
-  isOffice         Boolean  @default(false)
-  isEvent          Boolean  @default(false)
-  eventType        String?  // ROADSHOW, EWASTE_COLLECTION, OTHER
-  isErthbox        Boolean  @default(false)
-  erthboxLocationId String? // Reference to ErthboxLocation
-  status           String   @default("PENDING") // PENDING, SCHEDULED, CONFIRMED, BOOKED, COMPLETED
-  scheduledDate    String?  // YYYY-MM-DD
-  notes            String?
-  latitude         Float?
-  longitude        Float?
-  addressVerified  Boolean  @default(false)
-  addressVerificationNote String? // AI verification details
-  userId           String
-  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  erthboxLocation  ErthboxLocation? @relation(fields: [erthboxLocationId], references: [id], onDelete: SetNull)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id                      String           @id @default(cuid())
+  orderId                 String
+  customerName            String
+  phone                   String
+  address                 String
+  city                    String
+  size                    String
+  points                  Int
+  zone                    Int
+  isOffice                Boolean          @default(false)
+  isEvent                 Boolean          @default(false)
+  eventType               String?
+  isErthbox               Boolean          @default(false)
+  erthboxLocationId       String?
+  status                  String           @default("PENDING")
+  scheduledDate           String?
+  notes                   String?
+  latitude                Float?
+  longitude               Float?
+  addressVerified         Boolean          @default(false)
+  addressVerificationNote String?
+  userId                  String
+  createdAt               DateTime         @default(now())
+  updatedAt               DateTime         @updatedAt
+  erthboxLocation         ErthboxLocation? @relation(fields: [erthboxLocationId], references: [id])
+  user                    User             @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, orderId])
   @@index([userId, status])
@@ -117,7 +114,7 @@ model Order {
 
 model Holiday {
   id     String @id @default(cuid())
-  date   String // YYYY-MM-DD
+  date   String
   name   String
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -127,11 +124,11 @@ model Holiday {
 }
 
 model OffDay {
-  id     String @id @default(cuid())
-  date   String // YYYY-MM-DD
+  id     String  @id @default(cuid())
+  date   String
   reason String?
   userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, date])
   @@index([userId, date])
@@ -159,41 +156,41 @@ model ZoneConfig {
 }
 
 model UserZone {
-  id        String   @id @default(cuid())
-  zoneId    Int      // Zone number: built-in zone ID for overrides, or >= 100 for custom zones
-  name      String   // Zone name (custom name for new zones, or override for built-in)
-  region    String   // State/region this zone belongs to
-  isCustom  Boolean  @default(false) // true = user-created zone, false = built-in zone override
-  isEnabled Boolean  @default(true)
-  areas     String   @default("[]") // JSON array of area strings for custom zones
-  order     Int      @default(0)
+  id        String  @id @default(cuid())
+  zoneId    Int
+  name      String
+  region    String
+  isCustom  Boolean @default(false)
+  isEnabled Boolean @default(true)
+  areas     String  @default("[]")
+  order     Int     @default(0)
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, zoneId])
 }
 
 model SOSRequest {
-  id          String   @id @default(cuid())
-  orderId     String
-  orderRef    String   // The original Order.orderId for display
+  id           String   @id @default(cuid())
+  orderId      String
+  orderRef     String
   customerName String
-  phone       String
-  address     String
-  city        String
-  size        String
-  points      Int
-  zone        Int
-  isOffice    Boolean  @default(false)
-  notes       String?  // Original order notes
-  sosNote     String   // Reason for SOS - required
-  status      String   @default("ACTIVE") // ACTIVE, ANSWERED, CANCELLED
-  fromUserId  String
-  fromUser    User     @relation(fields: [fromUserId], references: [id], onDelete: Cascade)
-  toUserId    String?
-  toUser      User?    @relation("AnsweredSOS", fields: [toUserId], references: [id], onDelete: Cascade)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  phone        String
+  address      String
+  city         String
+  size         String
+  points       Int
+  zone         Int
+  isOffice     Boolean  @default(false)
+  notes        String?
+  sosNote      String
+  status       String   @default("ACTIVE")
+  fromUserId   String
+  toUserId     String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  toUser       User?    @relation("AnsweredSOS", fields: [toUserId], references: [id], onDelete: Cascade)
+  fromUser     User     @relation(fields: [fromUserId], references: [id], onDelete: Cascade)
 
   @@index([status])
   @@index([fromUserId])
@@ -202,12 +199,12 @@ model SOSRequest {
 model AuditLog {
   id        String   @id @default(cuid())
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  action    String   // CREATE, UPDATE, DELETE, SOS_CREATE, SOS_ANSWER, LOGIN, etc.
-  entity    String   // Order, User, Setting, ZoneConfig, SOSRequest, etc.
-  entityId  String?  // ID of the affected entity
-  details   String?  // JSON string with change details
+  action    String
+  entity    String
+  entityId  String?
+  details   String?
   createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([action, entity])
@@ -215,15 +212,15 @@ model AuditLog {
 }
 
 model Notification {
-  id         String   @id @default(cuid())
-  userId     String   // Target user
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type       String   // "system" or "normal"
-  title      String
-  message    String
-  isRead     Boolean  @default(false)
-  actionUrl  String?  // Optional URL to navigate to
-  createdAt  DateTime @default(now())
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  actionUrl String?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, isRead])
   @@index([userId, createdAt])
@@ -232,92 +229,142 @@ model Notification {
 model ChatMessage {
   id        String   @id @default(cuid())
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   message   String
-  mentions  String   @default("[]") // JSON array of mentioned userIds
+  mentions  String   @default("[]")
   isDeleted Boolean  @default(false)
-  deletedBy String?  // Admin who deleted
+  deletedBy String?
   createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([isDeleted, createdAt])
 }
 
-// ============ ERTHBOX LOCATIONS ============
-
-model ErthboxLocation {
-  id          String   @id @default(cuid())
-  name        String   // Location name (e.g. "IKEA Damansara", "1 Utama Mall")
-  address     String   // Full address
-  city        String   // City/area for zone detection
-  picName     String   // Person in Charge name
-  picPhone    String   // Person in Charge phone number
-  notes       String?  // Notes like "mall area, cannot enter between 12PM-2PM"
-  isActive    Boolean  @default(true) // Soft delete / disable
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  orders      Order[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+model HeroProfile {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  heroName      String
+  plateNumber   String
+  vehicleColor  String   @default("black")
+  vehicleModel  String   @default("")
+  updatedAt     DateTime @updatedAt
+  createdAt     DateTime @default(now())
+  homeLatitude  Float?
+  homeLongitude Float?
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-// ============ AI ASSISTANT ============
+model DriverLocation {
+  id        String   @id @default(cuid())
+  userId    String
+  latitude  Float
+  longitude Float
+  heading   Float?
+  speed     Float?
+  routeDate String?
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, updatedAt])
+}
+
+model TrackingLink {
+  id            String    @id @default(cuid())
+  token         String    @unique
+  orderId       String
+  userId        String
+  routeDate     String
+  customerName  String
+  customerPhone String?
+  latitude      Float
+  longitude     Float
+  stopNumber    Int
+  plannedEta    String?
+  completedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, routeDate])
+}
+
+model ErthboxLocation {
+  id        String   @id @default(cuid())
+  name      String
+  address   String
+  city      String
+  picName   String
+  picPhone  String
+  notes     String?
+  isActive  Boolean  @default(true)
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders    Order[]
+}
 
 model AiConversation {
-  id        String      @id @default(cuid())
-  userId    String
-  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  title     String      @default("New Chat")
-  isArchived Boolean    @default(false)
-  messages  AiMessage[]
-  actions   AiAction[]
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
+  id         String      @id @default(cuid())
+  userId     String
+  title      String      @default("New Chat")
+  isArchived Boolean     @default(false)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  actions    AiAction[]
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages   AiMessage[]
 }
 
 model AiMessage {
-  id             String   @id @default(cuid())
+  id             String         @id @default(cuid())
   conversationId String
-  conversation   AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  role           String   // "user", "assistant", "system"
+  role           String
   content        String
-  metadata       String?  // JSON: extra info like tokens used, model, etc.
-  createdAt      DateTime @default(now())
+  metadata       String?
+  createdAt      DateTime       @default(now())
+  conversation   AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([conversationId])
 }
 
 model AiAction {
-  id             String   @id @default(cuid())
+  id             String         @id @default(cuid())
   conversationId String
-  conversation   AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   userId         String
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  actionType     String   // "UPDATE_ORDER", "ADD_NOTE", "CHANGE_STATUS", "CREATE_ORDER", "ADD_ZONE_AREA"
-  entityType     String   // "Order" or "ZoneConfig"
-  entityId       String   // Order ID or zone number
-  description    String   // Human-readable description of what the AI wants to do
-  payload        String   // JSON: the actual changes to apply
-  status         String   @default("PENDING") // PENDING, APPROVED, REJECTED, APPLIED
-  reviewedBy     String?  // User ID who approved/rejected
+  actionType     String
+  entityType     String
+  entityId       String
+  description    String
+  payload        String
+  status         String         @default("PENDING")
+  reviewedBy     String?
   reviewedAt     DateTime?
-  createdAt      DateTime @default(now())
+  createdAt      DateTime       @default(now())
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversation   AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([conversationId])
   @@index([userId, status])
 }
 
 model AiFlag {
-  id          String   @id @default(cuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id             String    @id @default(cuid())
+  userId         String
   conversationId String?
-  messageContent  String   // The flagged message from the user
-  reason      String   // AI's reason for flagging
-  severity    String   @default("MEDIUM") // LOW, MEDIUM, HIGH, CRITICAL
-  isResolved  Boolean  @default(false)
-  resolvedBy  String?  // Admin who resolved
-  resolvedAt  DateTime?
-  createdAt   DateTime @default(now())
+  messageContent String
+  reason         String
+  severity       String    @default("MEDIUM")
+  isResolved     Boolean   @default(false)
+  resolvedBy     String?
+  resolvedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([isResolved])
+}
+
+enum Role {
+  ADMIN
+  HERO
+  SUPPORT
 }

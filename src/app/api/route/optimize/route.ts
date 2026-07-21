@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAuth } from "@/lib/session";
 import { optimizeRouteForDate, type VroomOrderInput } from "@/lib/vroom";
+import { FIXED_LOCATIONS } from "@/lib/route-model";
 
 // POST /api/route/optimize — Takes { date }, fetches geocoded orders for that
 // date, builds a VROOM problem, calls VROOM (with nearest-neighbour fallback),
@@ -61,7 +62,17 @@ export async function POST(request: NextRequest) {
       isOffice: o.isOffice,
     }));
 
-    const result = await optimizeRouteForDate(inputs, date);
+    // Fetch hero profile for custom home location
+    let homeOverride: { latitude: number; longitude: number } | undefined;
+    const heroProfile = await db.heroProfile.findUnique({ where: { userId: targetUserId } });
+    if (heroProfile?.homeLatitude != null && heroProfile?.homeLongitude != null) {
+      homeOverride = {
+        latitude: heroProfile.homeLatitude,
+        longitude: heroProfile.homeLongitude,
+      };
+    }
+
+    const result = await optimizeRouteForDate(inputs, date, homeOverride);
     return NextResponse.json({ success: true, route: result });
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : "Unknown error";

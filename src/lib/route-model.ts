@@ -23,7 +23,7 @@ export const FIXED_LOCATIONS = {
 
 export const VEHICLE = {
   name: "Isuzu D-Max 4x4 (2021)",
-  capacity: 80,          // max points per load
+  capacity: 20,          // max points per load (Isuzu D-Max max load)
   startHour: 10,         // first pickup at 10:00 AM
   endHour: 16,           // must be back home by 4:00 PM
   serviceTimePickup: 8,  // minutes per pickup

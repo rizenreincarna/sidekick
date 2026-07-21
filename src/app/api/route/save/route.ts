@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { randomUUID } from "crypto";
 import { db } from "@/lib/db";
 import { requireAuth } from "@/lib/session";
-import type { OptimizedRouteResult } from "@/lib/vroom";
+import type { OptimizedRouteResult, VroomStopDetail } from "@/lib/vroom";
 
 // POST /api/route/save — Persists an optimized route to the DB.
 // Body: { date, routeData, status? }
@@ -60,7 +61,50 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({ success: true, route: saved });
+    // ---- Generate/update tracking links for each stop ----
+    const trackingTokens: { orderId: string; token: string; customerName: string }[] = [];
+    let stopNum = 0;
+    for (const load of routeData.loads) {
+      for (const stop of load.stops) {
+        stopNum++;
+        // Find existing link by orderId + routeDate (preserve token if exists)
+        const existing = await db.trackingLink.findFirst({
+          where: { orderId: stop.orderId, routeDate: date, userId: targetUserId },
+        });
+        const token = existing?.token || randomUUID();
+        if (existing) {
+          await db.trackingLink.update({
+            where: { id: existing.id },
+            data: {
+              customerName: stop.customerName,
+              customerPhone: stop.phone || null,
+              latitude: stop.latitude,
+              longitude: stop.longitude,
+              stopNumber: stopNum,
+              plannedEta: stop.arrival ? new Date(stop.arrival * 1000).toISOString() : null,
+            },
+          });
+        } else {
+          await db.trackingLink.create({
+            data: {
+              token,
+              orderId: stop.orderId,
+              userId: targetUserId,
+              routeDate: date,
+              customerName: stop.customerName,
+              customerPhone: stop.phone || null,
+              latitude: stop.latitude,
+              longitude: stop.longitude,
+              stopNumber: stopNum,
+              plannedEta: stop.arrival ? new Date(stop.arrival * 1000).toISOString() : null,
+            },
+          });
+        }
+        trackingTokens.push({ orderId: stop.orderId, token, customerName: stop.customerName });
+      }
+    }
+
+    return NextResponse.json({ success: true, route: saved, trackingTokens });
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json({ error: `Failed to save route: ${msg}` }, { status: 500 });

@@ -2244,9 +2244,9 @@ function HeroDashboard({ stats, onRefresh, userZones }: { stats: Stats | null; o
       </div>
 
       {/* Zone Coverage - 7-day week view (all 7 days always visible) */}
-      <div className="nc-card nc-card--glow">
+      <div className="rounded-xl border border-white/10 bg-card p-4">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold flex items-center gap-2"><Layers className="h-5 w-5 text-primary" style={{ filter: "drop-shadow(0 0 8px rgba(52,211,153,0.5))" }} />Zone Coverage</h3>
+          <h3 className="font-semibold flex items-center gap-2"><Layers className="h-5 w-5 text-emerald-400" />Zone Coverage</h3>
           <div className="flex items-center gap-2 shrink-0">
             <button onClick={() => setWeekOffset(w => w - 1)} className="p-1 rounded hover:bg-white/10"><ChevronLeft className="h-4 w-4 text-muted-foreground" /></button>
             <span className="text-[0.625rem] text-muted-foreground text-center min-w-[110px]">
@@ -7582,15 +7582,7 @@ export default function HomePage() {
   }, []);
   const [aiEnabled, setAiEnabled] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [showAppSplash, setShowAppSplash] = useState(true);
   const onboardingCheckedRef = useRef(false);
-
-  // Neon Cockpit splash: brief brand reveal on first app mount, then fade out.
-  useEffect(() => {
-    if (status !== "authenticated") return;
-    const t = setTimeout(() => setShowAppSplash(false), 1200);
-    return () => clearTimeout(t);
-  }, [status]);
   const [verifySessionId, setVerifySessionId] = useState<string | null>(null);
   const [geocodeSessionId, setGeocodeSessionId] = useState<string | null>(null);
   const [showVerifyProgress, setShowVerifyProgress] = useState(false);
@@ -7662,22 +7654,23 @@ export default function HomePage() {
     }).catch(() => {});
   }, [session]);
 
-  // Show loading — Neon Cockpit splash
+  // Show loading
   if (status === "loading") {
     return (
-      <div className="nc-splash">
-        <div className="nc-splash__inner">
-          <div className="nc-splash__logo">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.png" alt="HERO Sidekick" className="h-9 w-9 rounded-lg" />
-          </div>
-          <div>
-            <p className="nc-splash__title">HERO Sidekick</p>
-            <p className="nc-splash__copy">Syncing operational telemetry...</p>
-          </div>
-          <div className="nc-splash__bar"><span /></div>
-        </div>
+    <div className="flex h-screen w-screen flex-col items-center justify-center gap-3 bg-[var(--background)]">
+      <div className="flex items-center gap-2">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/logo.png" alt="HERO Sidekick" className="h-7 w-7 rounded animate-pulse" />
+        <span className="text-[0.8125rem] font-semibold uppercase tracking-widest text-[hsl(var(--foreground))]">HERO Sidekick</span>
       </div>
+      <div className="flex items-center gap-2 text-[0.75rem] text-[hsl(var(--muted-foreground))]">
+        <Truck className="h-3 w-3 animate-pulse text-[hsl(var(--primary))]" />
+        <span>Syncing operational telemetry...</span>
+      </div>
+      <div className="mt-2 h-1 w-48 overflow-hidden rounded-full bg-[var(--border)]">
+        <div className="h-full w-1/3 animate-pulse bg-[hsl(var(--primary))]" />
+      </div>
+    </div>
     );
   }
 
@@ -7685,64 +7678,57 @@ export default function HomePage() {
     return <LoginPage />;
   }
 
-  const roleStyle = session.user?.role === "ADMIN"
-    ? { color: "var(--nc-danger)", borderColor: "rgba(248,113,113,0.30)", background: "rgba(248,113,113,0.10)" }
-    : session.user?.role === "SUPPORT"
-      ? { color: "var(--nc-info)", borderColor: "rgba(96,165,250,0.30)", background: "rgba(96,165,250,0.10)" }
-      : undefined;
-
   return (
-    <div className="nc-shell">
-      <div className="w-full max-w-5xl mx-auto flex flex-col min-h-dvh relative">
-      {/* Neon Cockpit splash overlay — fades out shortly after mount */}
-      <div className={`nc-splash ${showAppSplash ? "" : "nc-splash--hidden"}`} aria-hidden="true">
-        <div className="nc-splash__inner">
-          <div className="nc-splash__logo">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.png" alt="HERO Sidekick" className="h-9 w-9 rounded-lg" />
-          </div>
-          <div>
-            <p className="nc-splash__title">HERO Sidekick</p>
-            <p className="nc-splash__copy">Syncing operational telemetry...</p>
-          </div>
-          <div className="nc-splash__bar"><span /></div>
-        </div>
-      </div>
-
-      {/* Neon header — sticky so it never scrolls out of view */}
-      <header className="nc-header sticky top-0 z-50">
-        <div className="max-w-5xl mx-auto nc-brand-row" style={{ padding: "14px 16px 10px" }}>
-          <div className="nc-brand">
-            <div className="nc-logo">
+    <div className="min-h-dvh flex flex-col relative">
+      {/* Header — fixed so it never scrolls out of view in the WebView.
+          Two-tier layout: top row = brand, second row = compact actions.
+          Keeps login/logout + all controls visible on narrow screens (no cut-off). */}
+      <header className="fixed top-0 left-0 right-0 z-50 border-b border-white/10 bg-[var(--background)] safe-top">
+        {/* Brand row */}
+        <div className="max-w-5xl mx-auto px-4 pt-3 pb-2 flex items-center justify-between">
+            <div className="flex items-center gap-2 min-w-0">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/logo.png" alt="HERO Sidekick" />
+              <img src="/logo.png" alt="HERO Sidekick" className="h-7 w-7 shrink-0 rounded" />
+              <span className="text-[0.8125rem] font-semibold uppercase tracking-widest text-[hsl(var(--foreground))] leading-tight truncate">HERO Sidekick</span>
             </div>
-            <div className="min-w-0">
-              <div className="nc-wordmark truncate">HERO Sidekick</div>
-              <div className="nc-sub">ERTH Pickup Automation</div>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
+            {session.user?.role && (
+              <span className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[0.625rem] font-semibold shrink-0 ${
+                session.user.role === "ADMIN" ? "bg-red-500/15 text-red-400 border-red-500/30" :
+                session.user.role === "SUPPORT" ? "bg-blue-500/15 text-blue-400 border-blue-500/30" :
+                "bg-emerald-500/15 text-emerald-400 border-emerald-400/30"
+              }`}>
+                {session.user.role}
+              </span>
+            )}
+        </div>
+        {/* Actions row — compact, evenly spaced, no overflow */}
+        <div className="max-w-5xl mx-auto px-2 pb-2 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
             <NotificationBell session={session} onOpen={() => setNotifDrawerOpen(true)} />
             <ChatBubble session={session} onOpen={() => setChatDrawerOpen(true)} />
-            {session.user?.role && (
-              <span className="nc-role-chip" style={roleStyle}>{session.user.role}</span>
-            )}
-          </div>
-        </div>
-        {/* Actions row — neon chips, evenly spaced, no overflow */}
-        <div className="nc-actions-row max-w-5xl mx-auto">
-          <button type="button" className="nc-action-chip nc-action-chip--primary" onClick={() => setActiveTab("dashboard")}><Truck className="h-4 w-4" /> Today</button>
-          <a href="/route" className="nc-action-chip"><Zap className="h-4 w-4" /> Optimize</a>
-          <button type="button" className="nc-action-chip" onClick={refreshAll} aria-label="Refresh data"><RotateCcw className="h-4 w-4" /> Refresh</button>
-          <button type="button" className="nc-action-chip" onClick={() => setShowOnboarding(true)}><Info className="h-4 w-4" /> Tutorial</button>
-          <button type="button" className="nc-action-chip nc-action-chip--danger" onClick={() => signOut()}><LogOut className="h-4 w-4" /> Logout</button>
-          <div className="nc-action-chip" style={{ cursor: "default" }}>
-            <UserIcon className="h-4 w-4" />
-            <span className="max-w-[90px] truncate">{session.user?.name}</span>
-          </div>
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0 ml-1">
+              <UserIcon className="h-4 w-4" />
+              <span className="max-w-[80px] truncate">{session.user?.name}</span>
+            </div>
+            <Button variant="outline" size="sm" aria-label="Refresh data" title="Refresh" onClick={refreshAll} className="shrink-0 gap-1 border-white/10 bg-white/5 hover:bg-white/10 h-9 w-9 p-0">
+              <RotateCcw className="h-4 w-4" />
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => signOut()} className="shrink-0 gap-1 border-white/10 bg-white/5 hover:bg-white/10 text-destructive hover:text-destructive h-9 px-2.5">
+              <LogOut className="h-4 w-4" />
+              <span className="text-xs hidden xs:inline">Logout</span>
+            </Button>
+            {/* Route Optimizer link */}
+            <a href="/route">
+              <Button variant="outline" size="sm" className="shrink-0 gap-1 border-white/10 bg-white/5 hover:bg-white/10 hover:text-primary h-9 px-2.5">
+                <Route className="h-4 w-4" />
+                <span className="text-xs hidden xs:inline">Route</span>
+              </Button>
+            </a>
         </div>
       </header>
+
+      {/* Spacer for the two-tier fixed header: 6rem (~96px) + safe-top inset.
+          calc includes env(safe-area-inset-top) so content clears the header on notched devices. */}
+      <div className="h-[calc(6rem+env(safe-area-inset-top,0px))]" aria-hidden="true" />
 
       {/* SOS Alert Banner */}
       {stats && (stats as any).activeSosCount > 0 && (
@@ -7755,11 +7741,11 @@ export default function HomePage() {
       )}
 
       {/* Main - scrollable area */}
-      <main className="flex-1 pb-28 sm:pb-8">
+      <main className="flex-1 overflow-y-auto pb-24 sm:pb-4">
         <div className="max-w-5xl mx-auto w-full px-4 py-4">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          {/* Desktop top tabs — Neon Cockpit */}
-          <div className="hidden sm:block pb-3">
+          {/* Desktop top tabs */}
+          <div className="hidden sm:block sticky top-0 z-40 bg-background/95 backdrop-blur-sm pb-2">
             <TabsList className={`grid w-full bg-white/5 border border-white/10 h-12 ${session.user?.role === "ADMIN" ? "grid-cols-7" : "grid-cols-6"}`}>
             <TabsTrigger value="dashboard" className="gap-1 text-xs sm:text-sm data-[state=active]:bg-primary/20 data-[state=active]:text-primary h-12">
               <Truck className="h-4 w-4 hidden sm:block" />Dashboard
@@ -7806,23 +7792,28 @@ export default function HomePage() {
         </div>
       </main>
 
-      {/* Mobile Bottom Navigation — Neon Cockpit */}
-      <nav className="nc-nav sm:hidden fixed bottom-0 left-0 right-0 z-50">
-        <div className="nc-nav__grid" style={{ gridTemplateColumns: session.user?.role === "ADMIN" ? "repeat(7,1fr)" : "repeat(6,1fr)" }}>
-          <button onClick={() => setActiveTab("dashboard")} className={`nc-nav__btn ${activeTab === "dashboard" ? "nc-nav__btn--active" : ""}`} aria-label="Dashboard">
-            <Truck className="h-5 w-5" /><span className="truncate w-full text-center">Dashboard</span>
+      {/* Mobile Bottom Navigation */}
+      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-50 bg-[var(--background)]/95 backdrop-blur-lg border-t border-[var(--border)]" style={{paddingBottom: 'env(safe-area-inset-bottom, 0px)'}}>
+        <div className="flex">
+          <button onClick={() => setActiveTab("dashboard")} className={`flex flex-1 min-w-0 flex-col items-center justify-center gap-1 cursor-pointer transition-colors ${activeTab === "dashboard" ? "text-[hsl(var(--primary))]" : "text-[hsl(var(--muted-foreground))]"}`}>
+            <Truck className="h-5 w-5" />
+            <span className="text-[0.625rem] font-medium truncate w-full text-center">Dashboard</span>
           </button>
-          <button onClick={() => setActiveTab("new-order")} className={`nc-nav__btn ${activeTab === "new-order" ? "nc-nav__btn--active" : ""}`} aria-label="New Order">
-            <Plus className="h-5 w-5" /><span className="truncate w-full text-center">New</span>
+          <button onClick={() => setActiveTab("new-order")} className={`flex flex-1 min-w-0 flex-col items-center justify-center gap-1 cursor-pointer transition-colors ${activeTab === "new-order" ? "text-[hsl(var(--primary))]" : "text-[hsl(var(--muted-foreground))]"}`}>
+            <Plus className="h-5 w-5" />
+            <span className="text-[0.625rem] font-medium truncate w-full text-center">New</span>
           </button>
-          <button onClick={() => setActiveTab("orders")} className={`nc-nav__btn ${activeTab === "orders" ? "nc-nav__btn--active" : ""}`} aria-label="Orders">
-            <ClipboardList className="h-5 w-5" /><span className="truncate w-full text-center">Orders</span>
+          <button onClick={() => setActiveTab("orders")} className={`flex flex-1 min-w-0 flex-col items-center justify-center gap-1 cursor-pointer transition-colors ${activeTab === "orders" ? "text-[hsl(var(--primary))]" : "text-[hsl(var(--muted-foreground))]"}`}>
+            <ClipboardList className="h-5 w-5" />
+            <span className="text-[0.625rem] font-medium truncate w-full text-center">Orders</span>
           </button>
-          <button onClick={() => setActiveTab("schedule")} className={`nc-nav__btn ${activeTab === "schedule" ? "nc-nav__btn--active" : ""}`} aria-label="Schedule">
-            <Calendar className="h-5 w-5" /><span className="truncate w-full text-center">Schedule</span>
+          <button onClick={() => setActiveTab("schedule")} className={`flex flex-1 min-w-0 flex-col items-center justify-center gap-1 cursor-pointer transition-colors ${activeTab === "schedule" ? "text-[hsl(var(--primary))]" : "text-[hsl(var(--muted-foreground))]"}`}>
+            <Calendar className="h-5 w-5" />
+            <span className="text-[0.625rem] font-medium truncate w-full text-center">Schedule</span>
           </button>
-          <button onClick={() => setActiveTab("sos")} className={`nc-nav__btn relative ${activeTab === "sos" ? "nc-nav__btn--active" : ""}`} aria-label="SOS">
-            <Siren className="h-5 w-5" /><span className="truncate w-full text-center">SOS</span>
+          <button onClick={() => setActiveTab("sos")} className={`flex flex-1 min-w-0 flex-col items-center justify-center gap-1 cursor-pointer transition-colors relative ${activeTab === "sos" ? "text-[hsl(var(--primary))]" : "text-[hsl(var(--muted-foreground))]"}`}>
+            <Siren className="h-5 w-5" />
+            <span className="text-[0.625rem] font-medium truncate w-full text-center">SOS</span>
             {stats && stats.activeSosCount > 0 && (
               <span className="absolute -top-0.5 right-2 flex h-4 w-4">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
@@ -7831,12 +7822,14 @@ export default function HomePage() {
             )}
           </button>
           {session.user?.role === "ADMIN" && (
-            <button onClick={() => setActiveTab("users")} className={`nc-nav__btn ${activeTab === "users" ? "nc-nav__btn--active" : ""}`} aria-label="Users">
-              <Shield className="h-5 w-5" /><span className="truncate w-full text-center">Users</span>
+            <button onClick={() => setActiveTab("users")} className={`flex flex-1 min-w-0 flex-col items-center justify-center gap-1 cursor-pointer transition-colors ${activeTab === "users" ? "text-[hsl(var(--primary))]" : "text-[hsl(var(--muted-foreground))]"}`}>
+              <Shield className="h-5 w-5" />
+              <span className="text-[0.625rem] font-medium truncate w-full text-center">Users</span>
             </button>
           )}
-          <button onClick={() => setActiveTab("settings")} className={`nc-nav__btn ${activeTab === "settings" ? "nc-nav__btn--active" : ""}`} aria-label="Settings">
-            <Settings className="h-5 w-5" /><span className="truncate w-full text-center">Settings</span>
+          <button onClick={() => setActiveTab("settings")} className={`flex flex-1 min-w-0 flex-col items-center justify-center gap-1 cursor-pointer transition-colors ${activeTab === "settings" ? "text-[hsl(var(--primary))]" : "text-[hsl(var(--muted-foreground))]"}`}>
+            <Settings className="h-5 w-5" />
+            <span className="text-[0.625rem] font-medium truncate w-full text-center">Settings</span>
           </button>
         </div>
       </nav>
@@ -7854,7 +7847,6 @@ export default function HomePage() {
 
       {/* Onboarding Modal */}
       <OnboardingModal open={showOnboarding} onClose={() => setShowOnboarding(false)} onComplete={completeOnboarding} />
-      </div>
     </div>
   );
 }

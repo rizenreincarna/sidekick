@@ -1,0 +1,3105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0B0F17" />
+  <title>HERO Sidekick — Mobile Control Center</title>
+  <style>
+    :root {
+      --bg: #0B0F17;
+      --panel: #10161F;
+      --card: #161B22;
+      --border: #21262D;
+      --text: #E8F0F5;
+      --muted: #8B949E;
+      --primary: #34D399;
+      --teal: #2DD4BF;
+      --danger: #F87171;
+      --warning: #FBBF24;
+      --info: #60A5FA;
+      --violet: #A78BFA;
+      --primary-soft: rgba(52, 211, 153, 0.12);
+      --radius: 20px;
+      --shadow: 0 20px 50px rgba(0, 0, 0, 0.28);
+      color-scheme: dark;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background:
+        radial-gradient(circle at top center, rgba(52, 211, 153, 0.12), transparent 32%),
+        radial-gradient(circle at 85% 18%, rgba(56, 189, 248, 0.08), transparent 22%),
+        #05070C;
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+    }
+    body.loading { overflow: hidden; }
+    button, input, textarea, select { font: inherit; }
+    button { cursor: pointer; }
+    img, svg { display: block; }
+    [hidden] { display: none !important; }
+
+    :focus-visible {
+      outline: 2px solid var(--primary);
+      outline-offset: 2px;
+      border-radius: 10px;
+    }
+
+    .icon {
+      width: 18px;
+      height: 18px;
+      flex: 0 0 auto;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .app-shell {
+      height: 100vh;
+      height: 100dvh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .phone {
+      width: 100%;
+      max-width: 430px;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: relative;
+      background:
+        radial-gradient(circle at 50% -10%, rgba(52, 211, 153, 0.10), transparent 28%),
+        var(--bg);
+      box-shadow: 0 0 80px rgba(0, 0, 0, 0.45);
+    }
+
+    @media (min-width: 768px) {
+      .app-shell { padding: 24px; }
+      .phone {
+        height: min(880px, 100%);
+        border-radius: 36px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+    }
+
+    /* Splash */
+    .splash {
+      position: fixed;
+      inset: 0;
+      z-index: 200;
+      display: grid;
+      place-items: center;
+      background:
+        radial-gradient(circle at center, rgba(52, 211, 153, 0.14), transparent 30%),
+        #05070C;
+      transition: opacity 0.45s ease, visibility 0.45s ease;
+    }
+    .splash.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+    .splash-inner { display: grid; justify-items: center; gap: 16px; padding: 24px; text-align: center; }
+    .splash-logo {
+      width: 76px;
+      height: 76px;
+      border-radius: 24px;
+      display: grid;
+      place-items: center;
+      color: var(--primary);
+      background: linear-gradient(135deg, rgba(52, 211, 153, 0.22), rgba(45, 212, 191, 0.08));
+      border: 1px solid rgba(52, 211, 153, 0.35);
+      box-shadow: 0 0 40px rgba(52, 211, 153, 0.18);
+      animation: pulse-soft 1.7s ease-in-out infinite;
+    }
+    .splash-logo .icon { width: 34px; height: 34px; }
+    .splash-title {
+      margin: 0;
+      font-size: 0.92rem;
+      font-weight: 800;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+    }
+    .splash-copy { margin: 0; color: var(--muted); font-size: 0.8rem; }
+    .splash-bar {
+      width: 190px;
+      height: 4px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.08);
+    }
+    .splash-bar span {
+      display: block;
+      height: 100%;
+      width: 40%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, transparent, var(--primary), transparent);
+      animation: loading-sweep 1.2s ease-in-out infinite;
+    }
+
+    /* Header */
+    .app-header {
+      position: relative;
+      z-index: 30;
+      padding-top: env(safe-area-inset-top);
+      background: linear-gradient(180deg, rgba(11, 15, 23, 0.98), rgba(11, 15, 23, 0.92));
+      border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+      backdrop-filter: blur(16px);
+    }
+    .brand-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px 10px;
+    }
+    .brand { display: flex; align-items: center; gap: 11px; min-width: 0; }
+    .logo {
+      width: 40px;
+      height: 40px;
+      border-radius: 13px;
+      display: grid;
+      place-items: center;
+      color: var(--primary);
+      background: linear-gradient(135deg, rgba(52, 211, 153, 0.22), rgba(45, 212, 191, 0.07));
+      border: 1px solid rgba(52, 211, 153, 0.32);
+      box-shadow: 0 0 24px rgba(52, 211, 153, 0.16);
+    }
+    .logo .icon { width: 20px; height: 20px; }
+    .wordmark {
+      font-size: 0.82rem;
+      font-weight: 800;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .sub {
+      margin-top: 3px;
+      font-size: 0.6rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.09em;
+      white-space: nowrap;
+    }
+    .header-actions { display: flex; align-items: center; gap: 8px; }
+    .role-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 10px;
+      border-radius: 999px;
+      font-size: 0.62rem;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--primary);
+      background: var(--primary-soft);
+      border: 1px solid rgba(52, 211, 153, 0.28);
+    }
+
+    .icon-btn {
+      position: relative;
+      width: 40px;
+      height: 40px;
+      border-radius: 13px;
+      display: grid;
+      place-items: center;
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text);
+      transition: transform 0.15s ease, border-color 0.15s ease;
+    }
+    .icon-btn:active { transform: scale(0.96); }
+    .bell-badge {
+      position: absolute;
+      top: -4px;
+      right: -4px;
+      min-width: 17px;
+      height: 17px;
+      padding: 0 4px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      background: var(--danger);
+      color: #fff;
+      font-size: 0.6rem;
+      font-weight: 800;
+      box-shadow: 0 0 14px rgba(248, 113, 113, 0.5);
+    }
+
+    .actions-row {
+      display: flex;
+      gap: 8px;
+      padding: 0 16px 12px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .actions-row::-webkit-scrollbar { display: none; }
+    .action-chip {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 9px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text);
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+    }
+    .action-chip:active { transform: scale(0.97); }
+    .action-chip.danger { color: var(--danger); border-color: rgba(248, 113, 113, 0.28); background: rgba(248, 113, 113, 0.08); }
+    .action-chip .icon { width: 15px; height: 15px; }
+
+    /* Main */
+    .main {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      scroll-behavior: smooth;
+    }
+    .screen { display: none; }
+    .screen.active { display: block; animation: fade-up 0.25s ease; }
+    .stack { display: grid; gap: 14px; }
+
+    .page-title {
+      margin: 0;
+      font-size: 1.38rem;
+      line-height: 1.08;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+    .page-copy {
+      margin: 7px 0 0;
+      color: var(--muted);
+      font-size: 0.88rem;
+      line-height: 1.45;
+    }
+
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .micro-label {
+      font-size: 0.62rem;
+      font-weight: 800;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .text-btn {
+      border: 0;
+      background: transparent;
+      color: var(--primary);
+      font-size: 0.72rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 0;
+    }
+
+    /* Cards */
+    .card {
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 34%),
+        var(--card);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: var(--radius);
+      padding: 16px;
+      box-shadow: var(--shadow);
+    }
+    .card-glow {
+      border-color: rgba(52, 211, 153, 0.24);
+      box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.06), 0 0 42px rgba(52, 211, 153, 0.08), var(--shadow);
+    }
+    .hero-card { position: relative; overflow: hidden; }
+    .hero-card::after {
+      content: "";
+      position: absolute;
+      right: -50px;
+      bottom: -70px;
+      width: 190px;
+      height: 190px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(52, 211, 153, 0.22), transparent 68%);
+      pointer-events: none;
+    }
+    .hero-title { margin: 0; font-size: 1.12rem; font-weight: 800; }
+    .hero-copy { margin: 7px 0 13px; color: var(--muted); font-size: 0.84rem; line-height: 1.45; }
+
+    .hero-metrics, .summary-grid, .profile-stats {
+      display: grid;
+      gap: 8px;
+    }
+    .hero-metrics, .summary-grid { grid-template-columns: repeat(3, 1fr); margin-bottom: 13px; }
+    .profile-stats { grid-template-columns: repeat(3, 1fr); }
+    .metric {
+      padding: 11px 10px;
+      border-radius: 15px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+    }
+    .metric-value { font-size: 0.95rem; font-weight: 800; }
+    .metric-label {
+      margin-top: 4px;
+      font-size: 0.56rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    .progress {
+      height: 8px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.08);
+    }
+    .progress > span {
+      display: block;
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--primary), var(--teal));
+      box-shadow: 0 0 18px rgba(52, 211, 153, 0.35);
+    }
+    .progress-copy { margin-top: 8px; font-size: 0.72rem; color: var(--muted); }
+
+    .hero-actions, .summary-actions, .order-actions, .sos-actions, .support-actions, .triple-actions {
+      display: grid;
+      gap: 8px;
+    }
+    .hero-actions { grid-template-columns: 1.15fr 1fr; margin-top: 14px; }
+    .summary-actions, .sos-actions, .support-actions, .triple-actions { grid-template-columns: repeat(3, 1fr); }
+    .order-actions { grid-template-columns: repeat(3, 1fr); }
+
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+    .span-2 { grid-column: 1 / -1; }
+    .stat {
+      padding: 14px;
+      border-radius: 17px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+    }
+    .stat-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 10px;
+      color: var(--muted);
+    }
+    .stat-value { font-size: 1.35rem; font-weight: 800; line-height: 1; }
+    .stat-label { margin-top: 6px; font-size: 0.72rem; color: var(--muted); }
+    .stat-primary {
+      border-color: rgba(52, 211, 153, 0.22);
+      background:
+        linear-gradient(180deg, rgba(52, 211, 153, 0.10), transparent 42%),
+        rgba(255, 255, 255, 0.03);
+    }
+
+    .quick-actions {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+    .quick-action {
+      display: grid;
+      justify-items: center;
+      gap: 8px;
+      padding: 14px 6px;
+      border-radius: 17px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text);
+      font-size: 0.64rem;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      transition: transform 0.15s ease, border-color 0.15s ease;
+    }
+    .quick-action:active { transform: scale(0.97); }
+    .quick-action .icon { color: var(--primary); }
+    .quick-action.sos-action .icon { color: var(--danger); }
+
+    .list-card { padding: 8px 0; }
+    .list-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 12px 14px;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .list-item:first-child { border-top: 0; }
+    .item-icon {
+      width: 38px;
+      height: 38px;
+      border-radius: 13px;
+      display: grid;
+      place-items: center;
+      background: var(--primary-soft);
+      color: var(--primary);
+      border: 1px solid rgba(52, 211, 153, 0.18);
+    }
+    .item-icon.danger { background: rgba(248, 113, 113, 0.10); color: var(--danger); border-color: rgba(248, 113, 113, 0.22); }
+    .item-icon.warning { background: rgba(251, 191, 36, 0.10); color: var(--warning); border-color: rgba(251, 191, 36, 0.22); }
+    .item-icon.info { background: rgba(96, 165, 250, 0.10); color: var(--info); border-color: rgba(96, 165, 250, 0.22); }
+    .item-icon.violet { background: rgba(167, 139, 250, 0.10); color: var(--violet); border-color: rgba(167, 139, 250, 0.22); }
+    .item-main { flex: 1; min-width: 0; }
+    .item-title { font-size: 0.9rem; font-weight: 750; }
+    .item-desc { margin-top: 4px; color: var(--muted); font-size: 0.76rem; line-height: 1.4; }
+    .item-side { display: grid; justify-items: end; gap: 6px; }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 9px;
+      border-radius: 999px;
+      font-size: 0.6rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      background: rgba(255, 255, 255, 0.05);
+      white-space: nowrap;
+    }
+    .badge.success, .badge.completed, .badge.confirmed { color: var(--primary); border-color: rgba(52, 211, 153, 0.30); background: rgba(52, 211, 153, 0.10); }
+    .badge.warning, .badge.pending { color: var(--warning); border-color: rgba(251, 191, 36, 0.30); background: rgba(251, 191, 36, 0.10); }
+    .badge.danger, .badge.canceled { color: var(--danger); border-color: rgba(248, 113, 113, 0.30); background: rgba(248, 113, 113, 0.10); }
+    .badge.info, .badge.scheduled { color: var(--info); border-color: rgba(96, 165, 250, 0.30); background: rgba(96, 165, 250, 0.10); }
+    .badge.booked { color: var(--violet); border-color: rgba(167, 139, 250, 0.30); background: rgba(167, 139, 250, 0.10); }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-height: 44px;
+      padding: 0 14px;
+      border-radius: 14px;
+      border: 1px solid transparent;
+      font-size: 0.84rem;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+      transition: transform 0.15s ease, opacity 0.15s ease;
+    }
+    .btn:active { transform: scale(0.98); }
+    .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+    .btn.small { min-height: 38px; font-size: 0.76rem; border-radius: 12px; padding: 0 10px; }
+    .btn-primary {
+      color: #04110B;
+      background: linear-gradient(135deg, var(--primary), var(--teal));
+      box-shadow: 0 12px 30px rgba(52, 211, 153, 0.22);
+    }
+    .btn-outline {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.04);
+      border-color: rgba(255, 255, 255, 0.12);
+    }
+    .btn-danger {
+      color: #fff;
+      background: linear-gradient(135deg, #F87171, #EF4444);
+      box-shadow: 0 12px 30px rgba(248, 113, 113, 0.20);
+    }
+    .btn.danger-outline {
+      color: var(--danger);
+      background: rgba(248, 113, 113, 0.06);
+      border-color: rgba(248, 113, 113, 0.28);
+    }
+
+    .input, textarea.input {
+      width: 100%;
+      min-height: 46px;
+      border-radius: 14px;
+      padding: 12px 14px;
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      outline: none;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .input::placeholder { color: rgba(139, 148, 158, 0.8); }
+    .input:focus {
+      border-color: rgba(52, 211, 153, 0.55);
+      box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.12);
+    }
+    input[type="date"] { color-scheme: dark; }
+
+    .field { display: grid; gap: 8px; }
+    .split {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: end;
+    }
+    .optimize-btn { min-width: 132px; }
+
+    .filter-row {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+      scrollbar-width: none;
+    }
+    .filter-row::-webkit-scrollbar { display: none; }
+    .filter-chip {
+      flex: 0 0 auto;
+      padding: 9px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--muted);
+      font-size: 0.74rem;
+      font-weight: 750;
+    }
+    .filter-chip.active {
+      color: var(--primary);
+      border-color: rgba(52, 211, 153, 0.32);
+      background: rgba(52, 211, 153, 0.10);
+      box-shadow: 0 0 18px rgba(52, 211, 153, 0.10);
+    }
+
+    .order-card, .sos-card { display: grid; gap: 12px; }
+    .order-card { cursor: pointer; }
+    .order-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .order-title { font-size: 1rem; font-weight: 800; }
+    .order-meta { display: grid; gap: 7px; color: var(--muted); font-size: 0.82rem; }
+    .meta-row { display: flex; align-items: flex-start; gap: 8px; }
+    .meta-row .icon { width: 16px; height: 16px; margin-top: 1px; }
+
+    /* Map */
+    .map-card {
+      position: relative;
+      min-height: 430px;
+      overflow: hidden;
+      border-radius: 24px;
+      border: 1px solid rgba(52, 211, 153, 0.18);
+      background:
+        radial-gradient(circle at 50% 0%, rgba(52, 211, 153, 0.16), transparent 32%),
+        radial-gradient(circle at 80% 70%, rgba(56, 189, 248, 0.08), transparent 24%),
+        #081018;
+      box-shadow: var(--shadow);
+    }
+    .map-grid {
+      position: absolute;
+      inset: -40% -20% -10%;
+      background-image:
+        linear-gradient(rgba(52, 211, 153, 0.12) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(52, 211, 153, 0.12) 1px, transparent 1px);
+      background-size: 34px 34px;
+      transform: perspective(700px) rotateX(56deg) scale(1.18);
+      transform-origin: center top;
+      opacity: 0.52;
+      mask-image: linear-gradient(to bottom, transparent, black 18%, black 82%, transparent);
+      animation: grid-drift 8s linear infinite;
+      pointer-events: none;
+    }
+    .map-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+    .route-line {
+      fill: none;
+      stroke: url(#routeGradient);
+      stroke-width: 4;
+      stroke-linecap: round;
+      stroke-dasharray: 10 12;
+      filter: drop-shadow(0 0 10px rgba(52, 211, 153, 0.55));
+      animation: route-flow 1.2s linear infinite;
+    }
+    .map-node {
+      fill: #0B0F17;
+      stroke: var(--primary);
+      stroke-width: 3;
+      filter: drop-shadow(0 0 8px rgba(52, 211, 153, 0.5));
+    }
+    .map-node.end { stroke: var(--teal); }
+    .map-chip {
+      position: absolute;
+      z-index: 2;
+      padding: 7px 10px;
+      border-radius: 999px;
+      background: rgba(4, 8, 12, 0.72);
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      backdrop-filter: blur(8px);
+      font-size: 0.64rem;
+      font-weight: 800;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+    }
+    .map-chip.left { top: 14px; left: 14px; }
+    .map-chip.right { top: 14px; right: 14px; color: var(--primary); border-color: rgba(52, 211, 153, 0.30); }
+    .map-summary {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      bottom: 12px;
+      z-index: 2;
+      padding: 14px;
+      border-radius: 20px;
+      background: rgba(7, 11, 17, 0.84);
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      backdrop-filter: blur(14px);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+    }
+    .summary-grid { margin-bottom: 12px; grid-template-columns: repeat(4, 1fr); }
+    .summary-value { font-size: 0.98rem; font-weight: 800; }
+    .summary-label {
+      margin-top: 4px;
+      font-size: 0.54rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    .sequence {
+      width: 30px;
+      height: 30px;
+      border-radius: 10px;
+      display: grid;
+      place-items: center;
+      background: var(--primary-soft);
+      color: var(--primary);
+      border: 1px solid rgba(52, 211, 153, 0.20);
+      font-size: 0.78rem;
+      font-weight: 800;
+    }
+
+    /* SOS */
+    .sos-banner, .sos-hero {
+      border-color: rgba(248, 113, 113, 0.32);
+      background:
+        linear-gradient(180deg, rgba(248, 113, 113, 0.12), transparent 40%),
+        var(--card);
+    }
+    .sos-hero.sos-active { animation: sos-pulse 2.2s ease-in-out infinite; }
+    .sos-button {
+      width: 100%;
+      min-height: 112px;
+      border-radius: 28px;
+      border: 1px solid rgba(248, 113, 113, 0.35);
+      background: linear-gradient(135deg, #F87171, #EF4444);
+      color: #fff;
+      font-size: 1.35rem;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      box-shadow: 0 18px 40px rgba(248, 113, 113, 0.24);
+    }
+    .sos-button.active {
+      background: linear-gradient(135deg, #EF4444, #B91C1C);
+      animation: pulse-soft 1.4s ease-in-out infinite;
+    }
+    .sos-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 1rem;
+      font-weight: 800;
+    }
+    .sos-title .icon { color: var(--danger); }
+
+    .checklist { display: grid; gap: 10px; }
+    .check-item {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      padding: 12px;
+      border-radius: 15px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+    }
+    .check-item .icon { color: var(--primary); margin-top: 1px; }
+    .check-title { font-size: 0.86rem; font-weight: 750; }
+    .check-desc { margin-top: 4px; color: var(--muted); font-size: 0.76rem; line-height: 1.4; }
+
+    /* Settings */
+    .profile {
+      display: flex;
+      align-items: center;
+      gap: 13px;
+      margin-bottom: 14px;
+    }
+    .avatar {
+      width: 54px;
+      height: 54px;
+      border-radius: 18px;
+      display: grid;
+      place-items: center;
+      font-size: 1.1rem;
+      font-weight: 900;
+      color: #04110B;
+      background: linear-gradient(135deg, var(--primary), var(--teal));
+      box-shadow: 0 0 28px rgba(52, 211, 153, 0.22);
+    }
+    .profile-name { font-size: 1rem; font-weight: 800; }
+    .profile-meta { margin-top: 4px; color: var(--muted); font-size: 0.8rem; }
+
+    .setting-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 13px 0;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .setting-row:first-child { border-top: 0; padding-top: 0; }
+    .setting-row:last-child { padding-bottom: 0; }
+    .setting-title { font-size: 0.9rem; font-weight: 750; }
+    .setting-desc { margin-top: 4px; color: var(--muted); font-size: 0.78rem; line-height: 1.4; }
+
+    .switch {
+      width: 48px;
+      height: 30px;
+      border-radius: 999px;
+      position: relative;
+      flex: 0 0 auto;
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      background: rgba(255, 255, 255, 0.12);
+      transition: background 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    }
+    .switch::after {
+      content: "";
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+      transition: transform 0.2s ease;
+    }
+    .switch[aria-checked="true"] {
+      background: linear-gradient(135deg, var(--primary), var(--teal));
+      border-color: transparent;
+      box-shadow: 0 0 18px rgba(52, 211, 153, 0.24);
+    }
+    .switch[aria-checked="true"]::after { transform: translateX(18px); }
+
+    .changelog-item {
+      position: relative;
+      padding-left: 18px;
+      margin-top: 14px;
+    }
+    .changelog-item:first-child { margin-top: 0; }
+    .changelog-item::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 7px;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--primary);
+      box-shadow: 0 0 12px rgba(52, 211, 153, 0.5);
+    }
+    .changelog-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .changelog-title { font-size: 0.9rem; font-weight: 800; }
+    .changelog-date { color: var(--muted); font-size: 0.72rem; }
+    .changelog-copy { margin: 7px 0 0; color: var(--muted); font-size: 0.82rem; line-height: 1.45; }
+
+    .model-row {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      margin-top: 10px;
+      scrollbar-width: none;
+    }
+    .model-row::-webkit-scrollbar { display: none; }
+    .model-chip {
+      flex: 0 0 auto;
+      padding: 9px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--muted);
+      font-size: 0.74rem;
+      font-weight: 750;
+    }
+    .model-chip.active {
+      color: var(--info);
+      border-color: rgba(96, 165, 250, 0.32);
+      background: rgba(96, 165, 250, 0.10);
+    }
+
+    /* Overlays */
+    .scrim {
+      position: absolute;
+      inset: 0;
+      z-index: 80;
+      background: rgba(0, 0, 0, 0.48);
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.22s ease, visibility 0.22s ease;
+      backdrop-filter: blur(2px);
+    }
+    .scrim.open { opacity: 1; visibility: visible; }
+
+    .drawer, .sheet {
+      position: absolute;
+      z-index: 90;
+      display: flex;
+      flex-direction: column;
+      background:
+        radial-gradient(circle at top right, rgba(52, 211, 153, 0.10), transparent 28%),
+        #0D131C;
+      visibility: hidden;
+      transition: transform 0.25s ease, visibility 0.25s ease;
+    }
+    .drawer {
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: min(100%, 380px);
+      border-left: 1px solid rgba(255, 255, 255, 0.08);
+      transform: translateX(105%);
+      padding-top: env(safe-area-inset-top);
+    }
+    .sheet {
+      left: 0;
+      right: 0;
+      bottom: 0;
+      top: auto;
+      width: 100%;
+      max-height: 88%;
+      border-radius: 28px 28px 0 0;
+      border-top: 1px solid rgba(255, 255, 255, 0.10);
+      transform: translateY(105%);
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    .drawer.open, .sheet.open { transform: translate(0, 0); visibility: visible; }
+
+    .drawer-header, .sheet-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 16px 14px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    }
+    .sheet-header { padding-top: 10px; }
+    .drawer-title, .sheet-title { font-size: 0.95rem; font-weight: 800; }
+    .drawer-sub, .sheet-sub { margin-top: 4px; color: var(--muted); font-size: 0.74rem; }
+    .drawer-body, .sheet-body { flex: 1; overflow-y: auto; padding: 12px; }
+    .drawer-footer, .sheet-footer {
+      padding: 12px;
+      border-top: 1px solid rgba(255, 255, 255, 0.07);
+      padding-bottom: calc(12px + env(safe-area-inset-bottom));
+    }
+    .sheet-handle {
+      width: 48px;
+      height: 4px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.18);
+      margin: 10px auto 0;
+    }
+
+    .modal {
+      position: absolute;
+      inset: 0;
+      z-index: 100;
+      display: grid;
+      place-items: center;
+      padding: 18px;
+      background: rgba(0, 0, 0, 0.52);
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.22s ease, visibility 0.22s ease;
+      backdrop-filter: blur(3px);
+    }
+    .modal.open { opacity: 1; visibility: visible; }
+    .modal-card {
+      width: min(100%, 360px);
+      max-height: 82%;
+      overflow: auto;
+    }
+
+    .notification-item {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      padding: 13px 12px;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.03);
+      margin-bottom: 10px;
+    }
+    .notification-item.unread {
+      border-color: rgba(52, 211, 153, 0.20);
+      background:
+        linear-gradient(180deg, rgba(52, 211, 153, 0.08), transparent 38%),
+        rgba(255, 255, 255, 0.03);
+    }
+    .notification-item.read { opacity: 0.62; }
+    .notification-title { font-size: 0.86rem; font-weight: 800; }
+    .notification-desc { margin-top: 5px; color: var(--muted); font-size: 0.78rem; line-height: 1.4; }
+    .notification-time { margin-top: 7px; font-size: 0.66rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+
+    .chat-tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      padding: 12px 12px 0;
+    }
+    .chat-tab {
+      min-height: 38px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 800;
+    }
+    .chat-tab.active {
+      color: var(--primary);
+      border-color: rgba(52, 211, 153, 0.30);
+      background: rgba(52, 211, 153, 0.10);
+    }
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .msg {
+      max-width: 86%;
+      padding: 10px 12px;
+      border-radius: 16px;
+      font-size: 0.84rem;
+      line-height: 1.4;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .msg-meta {
+      font-size: 0.6rem;
+      color: var(--muted);
+      margin-bottom: 5px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 800;
+    }
+    .msg.other {
+      align-self: flex-start;
+      background: rgba(255, 255, 255, 0.05);
+      border-bottom-left-radius: 6px;
+    }
+    .msg.me {
+      align-self: flex-end;
+      background: linear-gradient(135deg, rgba(52, 211, 153, 0.22), rgba(45, 212, 191, 0.12));
+      border-color: rgba(52, 211, 153, 0.25);
+      border-bottom-right-radius: 6px;
+    }
+    .msg.ai {
+      align-self: flex-start;
+      background: rgba(96, 165, 250, 0.10);
+      border-color: rgba(96, 165, 250, 0.22);
+      border-bottom-left-radius: 6px;
+    }
+    .chat-input-row { display: flex; gap: 8px; }
+
+    .status-chips {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    .status-chip {
+      min-height: 38px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--muted);
+      font-size: 0.66rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .status-chip.active {
+      color: #04110B;
+      background: linear-gradient(135deg, var(--primary), var(--teal));
+      border-color: transparent;
+    }
+    .status-chip.active[data-status="PENDING"] {
+      color: #201500;
+      background: linear-gradient(135deg, #FBBF24, #F59E0B);
+    }
+    .status-chip.active[data-status="SCHEDULED"] {
+      color: #071120;
+      background: linear-gradient(135deg, #60A5FA, #38BDF8);
+    }
+    .status-chip.active[data-status="BOOKED"] {
+      color: #160B2E;
+      background: linear-gradient(135deg, #A78BFA, #8B5CF6);
+    }
+    .status-chip.active[data-status="CANCELED"] {
+      color: #fff;
+      background: linear-gradient(135deg, #F87171, #EF4444);
+    }
+
+    .summary-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .log-list { display: grid; gap: 8px; margin-top: 12px; }
+
+    /* Bottom nav */
+    .bottom-nav {
+      z-index: 40;
+      padding-bottom: env(safe-area-inset-bottom);
+      background: rgba(8, 11, 17, 0.96);
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(18px);
+    }
+    .nav-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      min-height: 72px;
+    }
+    .nav-btn {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      font-size: 0.56rem;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      padding: 8px 4px;
+    }
+    .nav-btn .icon { width: 20px; height: 20px; }
+    .nav-btn.active {
+      color: var(--primary);
+      text-shadow: 0 0 18px rgba(52, 211, 153, 0.4);
+    }
+    .nav-btn.active::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 28px;
+      height: 3px;
+      border-radius: 0 0 8px 8px;
+      background: var(--primary);
+      box-shadow: 0 0 16px rgba(52, 211, 153, 0.65);
+    }
+
+    .toast {
+      position: absolute;
+      left: 50%;
+      bottom: calc(92px + env(safe-area-inset-bottom));
+      transform: translateX(-50%) translateY(14px);
+      opacity: 0;
+      pointer-events: none;
+      z-index: 120;
+      max-width: min(92%, 400px);
+      padding: 11px 16px;
+      border-radius: 14px;
+      background: rgba(13, 18, 26, 0.96);
+      border: 1px solid rgba(52, 211, 153, 0.30);
+      color: var(--text);
+      font-size: 0.82rem;
+      font-weight: 700;
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.4);
+      transition: opacity 0.25s ease, transform 0.25s ease;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    @keyframes fade-up {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: none; }
+    }
+    @keyframes pulse-soft {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.72; }
+    }
+    @keyframes loading-sweep {
+      0% { transform: translateX(-120%); }
+      100% { transform: translateX(280%); }
+    }
+    @keyframes grid-drift {
+      from { background-position: 0 0; }
+      to { background-position: 0 34px; }
+    }
+    @keyframes route-flow { to { stroke-dashoffset: -22; } }
+    @keyframes sos-pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.16), var(--shadow); }
+      50% { box-shadow: 0 0 0 8px rgba(248, 113, 113, 0), var(--shadow); }
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spin { animation: spin 1s linear infinite; }
+
+    .reduce-motion *,
+    .reduce-motion *::before,
+    .reduce-motion *::after {
+      animation: none !important;
+      transition: none !important;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation: none !important;
+        transition: none !important;
+      }
+    }
+
+    body.neon-off .card-glow,
+    body.neon-off .logo,
+    body.neon-off .avatar,
+    body.neon-off .nav-btn.active::before,
+    body.neon-off .bell-badge,
+    body.neon-off .map-node,
+    body.neon-off .route-line,
+    body.neon-off .splash-logo {
+      box-shadow: none !important;
+      filter: none !important;
+      text-shadow: none !important;
+    }
+    body.neon-off .map-grid,
+    body.neon-off .route-line,
+    body.neon-off .splash-bar span,
+    body.neon-off .splash-logo,
+    body.neon-off .sos-hero.sos-active {
+      animation: none !important;
+    }
+    body.neon-off .map-grid { opacity: 0.28; }
+  </style>
+</head>
+<body class="loading">
+  <!-- SVG sprite -->
+  <svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+    <symbol id="icon-dashboard" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h5v-6h4v6h5V9.5"/></g></symbol>
+    <symbol id="icon-route" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></g></symbol>
+    <symbol id="icon-orders" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></g></symbol>
+    <symbol id="icon-sos" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></g></symbol>
+    <symbol id="icon-settings" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7"/><path d="M4 10V3"/><path d="M12 21v-9"/><path d="M12 8V3"/><path d="M20 21v-5"/><path d="M20 12V3"/><path d="M2 14h4"/><path d="M10 8h4"/><path d="M18 16h4"/></g></symbol>
+    <symbol id="icon-refresh" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></g></symbol>
+    <symbol id="icon-pin" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></g></symbol>
+    <symbol id="icon-navigation" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 11 19-9-9 19-2-8-8-2z"/></g></symbol>
+    <symbol id="icon-message" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></g></symbol>
+    <symbol id="icon-phone" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></g></symbol>
+    <symbol id="icon-check" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></g></symbol>
+    <symbol id="icon-sparkles" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z"/><path d="M19 15v4"/><path d="M17 17h4"/></g></symbol>
+    <symbol id="icon-truck" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></g></symbol>
+    <symbol id="icon-bell" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></g></symbol>
+    <symbol id="icon-shield" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></g></symbol>
+    <symbol id="icon-camera" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></g></symbol>
+    <symbol id="icon-logout" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></g></symbol>
+    <symbol id="icon-zap" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></g></symbol>
+    <symbol id="icon-target" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></g></symbol>
+    <symbol id="icon-x" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></g></symbol>
+    <symbol id="icon-send" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></g></symbol>
+    <symbol id="icon-mic" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><path d="M12 18v4"/></g></symbol>
+    <symbol id="icon-map" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3 3 6v15l6-3 6 3 6-3V3l-6 3-6-3z"/><path d="M9 3v15"/><path d="M15 6v15"/></g></symbol>
+    <symbol id="icon-check-circle" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m8.5 12 2.5 2.5 5-5"/></g></symbol>
+    <symbol id="icon-x-circle" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></g></symbol>
+    <symbol id="icon-upload" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></g></symbol>
+    <symbol id="icon-play" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3l14 9-14 9V3z"/></g></symbol>
+    <symbol id="icon-info" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></g></symbol>
+    <symbol id="icon-clipboard" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></g></symbol>
+  </svg>
+
+  <!-- Splash -->
+  <div class="splash" id="splash" aria-hidden="true">
+    <div class="splash-inner">
+      <div class="splash-logo"><svg class="icon"><use href="#icon-shield"></use></svg></div>
+      <div>
+        <p class="splash-title">HERO Sidekick</p>
+        <p class="splash-copy">Syncing operational telemetry...</p>
+      </div>
+      <div class="splash-bar"><span></span></div>
+    </div>
+  </div>
+
+  <div class="app-shell">
+    <div class="phone">
+      <header class="app-header">
+        <div class="brand-row">
+          <div class="brand">
+            <div class="logo"><svg class="icon"><use href="#icon-shield"></use></svg></div>
+            <div>
+              <div class="wordmark">HERO Sidekick</div>
+              <div class="sub">ERTH Pickup Automation</div>
+            </div>
+          </div>
+
+          <div class="header-actions">
+            <button type="button" class="icon-btn" data-open-overlay="notifDrawer" aria-label="Notifications">
+              <svg class="icon"><use href="#icon-bell"></use></svg>
+              <span class="bell-badge" data-notif-badge>3</span>
+            </button>
+            <button type="button" class="icon-btn" data-open-overlay="chatDrawer" aria-label="Team chat">
+              <svg class="icon"><use href="#icon-message"></use></svg>
+            </button>
+            <div class="role-chip">Hero</div>
+          </div>
+        </div>
+
+        <div class="actions-row">
+          <button type="button" class="action-chip" data-target="dashboard">
+            <svg class="icon"><use href="#icon-dashboard"></use></svg> Today
+          </button>
+          <button type="button" class="action-chip" data-optimize>
+            <svg class="icon"><use href="#icon-zap"></use></svg> Optimize
+          </button>
+          <button type="button" class="action-chip" data-toast="Operational telemetry refreshed">
+            <svg class="icon"><use href="#icon-refresh"></use></svg> Refresh
+          </button>
+          <button type="button" class="action-chip" data-open-overlay="onboardingModal">
+            <svg class="icon"><use href="#icon-info"></use></svg> Tutorial
+          </button>
+          <button type="button" class="action-chip danger" data-toast="Signed out (demo)">
+            <svg class="icon"><use href="#icon-logout"></use></svg> Logout
+          </button>
+        </div>
+      </header>
+
+      <main class="main" id="main">
+        <!-- DASHBOARD -->
+        <section class="screen active" id="dashboard" aria-label="Dashboard">
+          <div class="stack">
+            <div>
+              <div class="badge success" style="margin-bottom:10px">ZONE: SELANGOR SOUTH • Today</div>
+              <h1 class="page-title" id="greetingTitle">Good afternoon, Arif</h1>
+              <p class="page-copy">Vehicle: Myvi • Load 6/12 • Next stop in 18 min</p>
+              <p class="page-copy" id="todayLabel">Wednesday, 22 July 2026</p>
+            </div>
+
+            <section class="stat-grid" aria-label="Today stats">
+              <div class="stat stat-primary span-2">
+                <div class="stat-top">
+                  <span class="micro-label">On Route</span>
+                  <span class="badge success">Active</span>
+                </div>
+                <div class="stat-value">Myvi • Load 6/12</div>
+                <div class="stat-label">Next stop in 18 min</div>
+                <div style="margin-top:12px">
+                  <div class="progress"><span style="width:62%"></span></div>
+                </div>
+              </div>
+
+              <div class="stat">
+                <div class="stat-top">
+                  <span class="micro-label">Today's Stops</span>
+                  <svg class="icon"><use href="#icon-pin"></use></svg>
+                </div>
+                <div class="stat-value">8</div>
+                <div class="stat-label">Assigned</div>
+              </div>
+
+              <div class="stat">
+                <div class="stat-top">
+                  <span class="micro-label">Completed</span>
+                  <svg class="icon"><use href="#icon-check"></use></svg>
+                </div>
+                <div class="stat-value" id="completedStat">5</div>
+                <div class="stat-label">Pickups done</div>
+              </div>
+
+              <div class="stat">
+                <div class="stat-top">
+                  <span class="micro-label">Daily Points</span>
+                  <svg class="icon"><use href="#icon-target"></use></svg>
+                </div>
+                <div class="stat-value" id="pointsStat">15/20</div>
+                <div class="stat-label">Cap 20 pts</div>
+              </div>
+
+              <div class="stat">
+                <div class="stat-top">
+                  <span class="micro-label">Collected</span>
+                  <svg class="icon"><use href="#icon-orders"></use></svg>
+                </div>
+                <div class="stat-value">RM 180</div>
+                <div class="stat-label">Today</div>
+              </div>
+            </section>
+
+            <section class="quick-actions" aria-label="Quick actions">
+              <button type="button" class="quick-action" data-toast="New order flow opened">
+                <svg class="icon"><use href="#icon-orders"></use></svg>
+                New Order
+              </button>
+              <button type="button" class="quick-action" data-optimize>
+                <svg class="icon"><use href="#icon-zap"></use></svg>
+                Optimize
+              </button>
+              <button type="button" class="quick-action" data-toast="Voice brief: 8 stops, 32.4 km, ETA 12:15 PM">
+                <svg class="icon"><use href="#icon-mic"></use></svg>
+                Voice Brief
+              </button>
+              <button type="button" class="quick-action sos-action" data-target="sos">
+                <svg class="icon"><use href="#icon-sos"></use></svg>
+                SOS
+              </button>
+            </section>
+
+            <article class="card card-glow hero-card" data-order-card data-order-id="ORD-1041" data-customer="Nurul Ain"
+              data-address="12 Jalan TK 1/11, Taman Kinrara, Puchong" data-phone="+60 16-303 8834"
+              data-status="PENDING" data-new="true" data-points="3" data-size="L" data-verified="false">
+              <div class="section-head">
+                <span class="micro-label">Next Pickup</span>
+                <span class="badge pending" data-status-badge>Pending</span>
+              </div>
+              <h2 class="hero-title">Nurul Ain</h2>
+              <p class="hero-copy">10:40 AM • Taman Kinrara • ORD-1041</p>
+
+              <div class="hero-metrics">
+                <div class="metric">
+                  <div class="metric-value">2</div>
+                  <div class="metric-label">Items</div>
+                </div>
+                <div class="metric">
+                  <div class="metric-value">3 pts</div>
+                  <div class="metric-label">Size L</div>
+                </div>
+                <div class="metric">
+                  <div class="metric-value">18 min</div>
+                  <div class="metric-label">ETA</div>
+                </div>
+              </div>
+
+              <div class="order-meta">
+                <div class="meta-row"><svg class="icon"><use href="#icon-pin"></use></svg><span>12 Jalan TK 1/11, Taman Kinrara, Puchong</span></div>
+                <div class="meta-row"><svg class="icon"><use href="#icon-phone"></use></svg><span>+60 16-303 8834</span></div>
+              </div>
+
+              <div class="order-actions" style="margin-top:14px">
+                <button type="button" class="btn btn-outline small" data-toast="Opening navigation">
+                  <svg class="icon"><use href="#icon-navigation"></use></svg> Navigate
+                </button>
+                <button type="button" class="btn btn-outline small" data-toast="Opening WhatsApp">
+                  <svg class="icon"><use href="#icon-message"></use></svg> WhatsApp
+                </button>
+                <button type="button" class="btn btn-primary small" data-complete-order>
+                  <svg class="icon"><use href="#icon-check"></use></svg> Complete
+                </button>
+              </div>
+            </article>
+
+            <article class="card">
+              <div class="section-head">
+                <span class="micro-label">Active Route</span>
+                <span class="badge success">VROOM optimized</span>
+              </div>
+              <h2 class="hero-title">Selangor South Loop</h2>
+              <p class="hero-copy">32.4 km • Open • 5 of 8 stops • ETA 12:15 PM</p>
+
+              <div class="progress"><span style="width:62%"></span></div>
+
+              <div class="hero-actions">
+                <button type="button" class="btn btn-primary" data-target="route">
+                  <svg class="icon"><use href="#icon-route"></use></svg> Open Route
+                </button>
+                <button type="button" class="btn btn-outline" data-toast="Voice brief playing">
+                  <svg class="icon"><use href="#icon-mic"></use></svg> Voice Brief
+                </button>
+              </div>
+            </article>
+
+            <section class="card list-card" aria-label="Recent activity">
+              <div class="section-head" style="padding: 6px 14px 0;">
+                <span class="micro-label">Recent Activity</span>
+                <button type="button" class="text-btn" data-open-overlay="notifDrawer">View all</button>
+              </div>
+
+              <div class="list-item">
+                <div class="item-icon"><svg class="icon"><use href="#icon-check"></use></svg></div>
+                <div class="item-main">
+                  <div class="item-title">Completed ORD-1040</div>
+                  <div class="item-desc">Siti Zulaikha • 09:10 AM</div>
+                </div>
+                <div class="item-side"><span class="badge completed">Done</span></div>
+              </div>
+
+              <div class="list-item">
+                <div class="item-icon info"><svg class="icon"><use href="#icon-route"></use></svg></div>
+                <div class="item-main">
+                  <div class="item-title">Route re-optimized by VROOM</div>
+                  <div class="item-desc">Saved 14 minutes • 8 stops</div>
+                </div>
+                <div class="item-side"><span class="badge info">VROOM</span></div>
+              </div>
+
+              <div class="list-item">
+                <div class="item-icon warning"><svg class="icon"><use href="#icon-sos"></use></svg></div>
+                <div class="item-main">
+                  <div class="item-title">SOS test completed</div>
+                  <div class="item-desc">Support channel OK</div>
+                </div>
+                <div class="item-side"><span class="badge warning">Test</span></div>
+              </div>
+            </section>
+
+            <section class="card" aria-label="AI and team chat">
+              <div class="section-head">
+                <span class="micro-label">Sidekick AI</span>
+                <span class="badge info" data-model-badge>minimax-m3:cloud</span>
+              </div>
+              <h2 class="hero-title">Ask anything about today’s pickups</h2>
+              <p class="hero-copy">Team chat, AI route help, vision photo upload, and daily summary.</p>
+
+              <div class="triple-actions">
+                <button type="button" class="btn btn-outline small" data-open-overlay="chatDrawer">
+                  <svg class="icon"><use href="#icon-message"></use></svg> Team Chat
+                </button>
+                <button type="button" class="btn btn-outline small" data-vision-upload>
+                  <svg class="icon"><use href="#icon-camera"></use></svg> Vision
+                </button>
+                <button type="button" class="btn btn-primary small" data-daily-summary>
+                  <svg class="icon"><use href="#icon-sparkles"></use></svg> Summary
+                </button>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <!-- ROUTE -->
+        <section class="screen" id="route" aria-label="Route">
+          <div class="stack">
+            <div>
+              <h1 class="page-title">Route</h1>
+              <p class="page-copy">3D Route Map • Live • Esri Dark</p>
+            </div>
+
+            <article class="card">
+              <div class="split">
+                <div class="field">
+                  <label class="micro-label" for="routeDate">Pickup Date</label>
+                  <input class="input" type="date" id="routeDate" value="2026-07-22" />
+                </div>
+                <button type="button" class="btn btn-primary optimize-btn" id="optimizeBtn" data-optimize>
+                  <svg class="icon"><use href="#icon-zap"></use></svg> Re-optimize
+                </button>
+              </div>
+
+              <div id="optimizeProgress" hidden style="margin-top:14px">
+                <div class="progress"><span id="optimizeBar" style="width:0%"></span></div>
+                <div class="progress-copy" id="optimizeCopy">Optimizing with VROOM… 0%</div>
+              </div>
+            </article>
+
+            <article class="map-card" aria-label="3D route map">
+              <div class="map-grid"></div>
+
+              <svg class="map-svg" viewBox="0 0 400 420" preserveAspectRatio="none" aria-hidden="true">
+                <defs>
+                  <linearGradient id="routeGradient" x1="0" y1="1" x2="1" y2="0">
+                    <stop offset="0" stop-color="#34D399" />
+                    <stop offset="1" stop-color="#2DD4BF" />
+                  </linearGradient>
+                </defs>
+
+                <path class="route-line" d="M42 356C96 322 84 254 148 228S236 184 258 128 330 84 358 52" />
+                <circle class="map-node" cx="42" cy="356" r="7" />
+                <circle class="map-node" cx="148" cy="228" r="6" />
+                <circle class="map-node" cx="258" cy="128" r="6" />
+                <circle class="map-node end" cx="358" cy="52" r="7" />
+              </svg>
+
+              <div class="map-chip left">3D Route Map</div>
+              <div class="map-chip right">Esri Dark</div>
+
+              <div class="map-summary">
+                <div class="section-head" style="margin-bottom:10px">
+                  <span class="micro-label">Route Summary</span>
+                  <span class="badge success">VROOM</span>
+                </div>
+
+                <div class="summary-grid">
+                  <div>
+                    <div class="summary-value" id="distanceVal">32.4</div>
+                    <div class="summary-label">KM</div>
+                  </div>
+                  <div>
+                    <div class="summary-value" id="durationVal">2h 05</div>
+                    <div class="summary-label">Duration</div>
+                  </div>
+                  <div>
+                    <div class="summary-value" id="stopsVal">8</div>
+                    <div class="summary-label">Stops</div>
+                  </div>
+                  <div>
+                    <div class="summary-value" id="loadVal">6/12</div>
+                    <div class="summary-label">Load</div>
+                  </div>
+                </div>
+
+                <div class="summary-actions">
+                  <button type="button" class="btn btn-primary small" data-start-route>
+                    <svg class="icon"><use href="#icon-play"></use></svg> Start Route
+                  </button>
+                  <button type="button" class="btn btn-outline small" data-optimize>
+                    <svg class="icon"><use href="#icon-refresh"></use></svg> Re-optimize
+                  </button>
+                  <button type="button" class="btn btn-outline small" data-open-overlay="chatDrawer">
+                    <svg class="icon"><use href="#icon-message"></use></svg> Share
+                  </button>
+                </div>
+              </div>
+            </article>
+
+            <article class="card" aria-label="Route operations">
+              <div class="section-head">
+                <span class="micro-label">Route Operations</span>
+                <span class="badge info">Background jobs</span>
+              </div>
+
+              <div class="triple-actions">
+                <button type="button" class="btn btn-outline small" data-geocode>
+                  <svg class="icon"><use href="#icon-map"></use></svg> Geocode
+                </button>
+                <button type="button" class="btn btn-outline small" data-verify>
+                  <svg class="icon"><use href="#icon-check-circle"></use></svg> Verify
+                </button>
+                <button type="button" class="btn btn-outline small" data-toast="Route exported to Zeo format">
+                  <svg class="icon"><use href="#icon-upload"></use></svg> Export
+                </button>
+              </div>
+            </article>
+
+            <article class="card list-card" aria-label="Route stops">
+              <div class="section-head" style="padding: 6px 14px 0;">
+                <span class="micro-label">Stops</span>
+                <span class="badge success">5 of 8 done</span>
+              </div>
+
+              <div class="list-item">
+                <div class="sequence">1</div>
+                <div class="item-main">
+                  <div class="item-title">Depot — Selangor South</div>
+                  <div class="item-desc">Start point • 09:00 AM</div>
+                </div>
+                <div class="item-side"><span class="badge success">Start</span></div>
+              </div>
+
+              <div class="list-item">
+                <div class="sequence">2</div>
+                <div class="item-main">
+                  <div class="item-title">Ahmad Fikri</div>
+                  <div class="item-desc">Subang Jaya • ETA 35 min</div>
+                </div>
+                <div class="item-side"><span class="badge booked">Booked</span></div>
+              </div>
+
+              <div class="list-item">
+                <div class="sequence">3</div>
+                <div class="item-main">
+                  <div class="item-title">Lee Mei Ling</div>
+                  <div class="item-desc">KL Central • 12:05 PM</div>
+                </div>
+                <div class="item-side"><span class="badge scheduled">Scheduled</span></div>
+              </div>
+
+              <div class="list-item">
+                <div class="sequence">4</div>
+                <div class="item-main">
+                  <div class="item-title">Nurul Ain</div>
+                  <div class="item-desc">Taman Kinrara • 10:40 AM</div>
+                </div>
+                <div class="item-side"><span class="badge pending">Pending</span></div>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <!-- ORDERS -->
+        <section class="screen" id="orders" aria-label="Orders">
+          <div class="stack">
+            <div>
+              <h1 class="page-title">Pickup Orders</h1>
+              <p class="page-copy">Live order queue • tap an order for status control</p>
+            </div>
+
+            <div class="section-head" style="margin-bottom:0">
+              <input class="input" id="orderSearch" type="search" placeholder="Search order, customer, address" aria-label="Search orders" />
+              <button type="button" class="btn btn-primary small" style="min-width:74px" data-toast="New order flow opened">New</button>
+            </div>
+
+            <div class="filter-row" aria-label="Order filters">
+              <button type="button" class="filter-chip active" data-filter="all">All</button>
+              <button type="button" class="filter-chip" data-filter="new">New</button>
+              <button type="button" class="filter-chip" data-filter="PENDING">Pending</button>
+              <button type="button" class="filter-chip" data-filter="SCHEDULED">Scheduled</button>
+              <button type="button" class="filter-chip" data-filter="CONFIRMED">Confirmed</button>
+              <button type="button" class="filter-chip" data-filter="BOOKED">Booked</button>
+              <button type="button" class="filter-chip" data-filter="COMPLETED">Completed</button>
+              <button type="button" class="filter-chip" data-filter="CANCELED">Canceled</button>
+            </div>
+
+            <article class="card order-card" data-order-card data-order-id="ORD-1041" data-customer="Nurul Ain"
+              data-address="12 Jalan TK 1/11, Taman Kinrara, Puchong" data-phone="+60 16-303 8834"
+              data-status="PENDING" data-new="true" data-points="3" data-size="L" data-verified="false">
+              <div class="order-head">
+                <div>
+                  <div class="order-title">Nurul Ain</div>
+                  <div class="micro-label" style="margin-top:5px">ORD-1041 • 10:40 AM</div>
+                </div>
+                <span class="badge pending" data-status-badge>Pending</span>
+              </div>
+
+              <div class="order-meta">
+                <div class="meta-row"><svg class="icon"><use href="#icon-pin"></use></svg><span>12 Jalan TK 1/11, Taman Kinrara, Puchong</span></div>
+                <div class="meta-row"><svg class="icon"><use href="#icon-phone"></use></svg><span>+60 16-303 8834</span></div>
+                <div class="meta-row"><svg class="icon"><use href="#icon-target"></use></svg><span>2 items • Size L • 3 pts • 18 min ETA</span></div>
+              </div>
+
+              <div class="order-actions">
+                <button type="button" class="btn btn-outline small" data-toast="Opening navigation">
+                  <svg class="icon"><use href="#icon-navigation"></use></svg> Navigate
+                </button>
+                <button type="button" class="btn btn-outline small" data-toast="Opening WhatsApp">
+                  <svg class="icon"><use href="#icon-message"></use></svg> WhatsApp
+                </button>
+                <button type="button" class="btn btn-primary small" data-complete-order>
+                  <svg class="icon"><use href="#icon-check"></use></svg> Complete
+                </button>
+              </div>
+            </article>
+
+            <article class="card order-card" data-order-card data-order-id="ORD-1042" data-customer="Ahmad Fikri"
+              data-address="7 Jalan SS15/4, Subang Jaya" data-phone="+60 12-998 7712"
+              data-status="BOOKED" data-new="false" data-points="5" data-size="XL" data-verified="true">
+              <div class="order-head">
+                <div>
+                  <div class="order-title">Ahmad Fikri</div>
+                  <div class="micro-label" style="margin-top:5px">ORD-1042 • Subang Jaya</div>
+                </div>
+                <span class="badge booked" data-status-badge>Booked</span>
+              </div>
+
+              <div class="order-meta">
+                <div class="meta-row"><svg class="icon"><use href="#icon-pin"></use></svg><span>7 Jalan SS15/4, Subang Jaya</span></div>
+                <div class="meta-row"><svg class="icon"><use href="#icon-phone"></use></svg><span>+60 12-998 7712</span></div>
+                <div class="meta-row"><svg class="icon"><use href="#icon-target"></use></svg><span>4 items • Size XL • 5 pts • ETA 35 min</span></div>
+              </div>
+
+              <div class="order-actions">
+                <button type="button" class="btn btn-outline small" data-toast="Opening navigation">
+                  <svg class="icon"><use href="#icon-navigation"></use></svg> Navigate
+                </button>
+                <button type="button" class="btn btn-outline small" data-toast="Opening WhatsApp">
+                  <svg class="icon"><use href="#icon-message"></use></svg> WhatsApp
+                </button>
+                <button type="button" class="btn btn-primary small" data-complete-order>
+                  <svg class="icon"><use href="#icon-check"></use></svg> Complete
+                </button>
+              </div>
+            </article>
+
+            <article class="card order-card" data-order-card data-order-id="ORD-1043" data-customer="Lee Mei Ling"
+              data-address="KL Sentral, Level 2 Pickup Bay" data-phone="+60 18-224 9090"
+              data-status="SCHEDULED" data-new="false" data-points="2" data-size="M" data-verified="true">
+              <div class="order-head">
+                <div>
+                  <div class="order-title">Lee Mei Ling</div>
+                  <div class="micro-label" style="margin-top:5px">ORD-1043 • KL Central</div>
+                </div>
+                <span class="badge scheduled" data-status-badge>Scheduled</span>
+              </div>
+
+              <div class="order-meta">
+                <div class="meta-row"><svg class="icon"><use href="#icon-pin"></use></svg><span>KL Sentral, Level 2 Pickup Bay</span></div>
+                <div class="meta-row"><svg class="icon"><use href="#icon-phone"></use></svg><span>+60 18-224 9090</span></div>
+                <div class="meta-row"><svg class="icon"><use href="#icon-target"></use></svg><span>1 item • Size M • 2 pts • 12:05 PM</span></div>
+              </div>
+
+              <div class="order-actions">
+                <button type="button" class="btn btn-outline small" data-toast="Opening navigation">
+                  <svg class="icon"><use href="#icon-navigation"></use></svg> Navigate
+                </button>
+                <button type="button" class="btn btn-outline small" data-toast="Opening WhatsApp">
+                  <svg class="icon"><use href="#icon-message"></use></svg> WhatsApp
+                </button>
+                <button type="button" class="btn btn-primary small" data-complete-order>
+                  <svg class="icon"><use href="#icon-check"></use></svg> Complete
+                </button>
+              </div>
+            </article>
+
+            <article class="card order-card" data-order-card data-order-id="ORD-1044" data-customer="New Order — KL Central"
+              data-address="KL Central, Tower B, Concourse" data-phone="+60 17-556 1188"
+              data-status="PENDING" data-new="true" data-points="4" data-size="XL" data-verified="false">
+              <div class="order-head">
+                <div>
+                  <div class="order-title">New Order — KL Central</div>
+                  <div class="micro-label" style="margin-top:5px">ORD-1044 • Assigned 12:05 PM</div>
+                </div>
+                <span class="badge pending" data-status-badge>Pending</span>
+              </div>
+
+              <div class="order-meta">
+                <div class="meta-row"><svg class="icon"><use href="#icon-pin"></use></svg><span>KL Central, Tower B, Concourse</span></div>
+                <div class="meta-row"><svg class="icon"><use href="#icon-phone"></use></svg><span>+60 17-556 1188</span></div>
+                <div class="meta-row"><svg class="icon"><use href="#icon-target"></use></svg><span>3 items • Size XL • 4 pts • Just assigned</span></div>
+              </div>
+
+              <div class="order-actions">
+                <button type="button" class="btn btn-outline small" data-toast="Opening navigation">
+                  <svg class="icon"><use href="#icon-navigation"></use></svg> Navigate
+                </button>
+                <button type="button" class="btn btn-outline small" data-toast="Opening WhatsApp">
+                  <svg class="icon"><use href="#icon-message"></use></svg> WhatsApp
+                </button>
+                <button type="button" class="btn btn-primary small" data-complete-order>
+                  <svg class="icon"><use href="#icon-check"></use></svg> Complete
+                </button>
+              </div>
+            </article>
+
+            <article class="card order-card" data-order-card data-order-id="ORD-1040" data-customer="Siti Zulaikha"
+              data-address="9 Jalan Puchong 12, Puchong" data-phone="+60 13-776 5544"
+              data-status="COMPLETED" data-new="false" data-points="1" data-size="S" data-verified="true" data-completed="true">
+              <div class="order-head">
+                <div>
+                  <div class="order-title">Siti Zulaikha</div>
+                  <div class="micro-label" style="margin-top:5px">ORD-1040 • 09:10 AM</div>
+                </div>
+                <span class="badge completed" data-status-badge>Completed</span>
+              </div>
+
+              <div class="order-meta">
+                <div class="meta-row"><svg class="icon"><use href="#icon-pin"></use></svg><span>9 Jalan Puchong 12, Puchong</span></div>
+                <div class="meta-row"><svg class="icon"><use href="#icon-phone"></use></svg><span>+60 13-776 5544</span></div>
+                <div class="meta-row"><svg class="icon"><use href="#icon-target"></use></svg><span>1 item • Size S • 1 pt • Collected</span></div>
+              </div>
+
+              <div class="order-actions">
+                <button type="button" class="btn btn-outline small" data-toast="Opening navigation">
+                  <svg class="icon"><use href="#icon-navigation"></use></svg> Navigate
+                </button>
+                <button type="button" class="btn btn-outline small" data-toast="Opening WhatsApp">
+                  <svg class="icon"><use href="#icon-message"></use></svg> WhatsApp
+                </button>
+                <button type="button" class="btn btn-primary small" data-complete-order disabled>
+                  <svg class="icon"><use href="#icon-check"></use></svg> Done
+                </button>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <!-- SOS -->
+        <section class="screen" id="sos" aria-label="SOS">
+          <div class="stack">
+            <div>
+              <h1 class="page-title">Emergency SOS</h1>
+              <p class="page-copy">Tap to alert Support and share live location.</p>
+            </div>
+
+            <article class="card sos-hero" id="sosCard">
+              <div class="section-head">
+                <span class="micro-label">SOS Status</span>
+                <span class="badge success" id="sosStatus">Inactive</span>
+              </div>
+
+              <button type="button" class="sos-button" id="sosButton">SOS</button>
+
+              <div class="support-actions" style="margin-top:14px">
+                <button type="button" class="btn btn-outline small" data-toast="Calling Support">
+                  <svg class="icon"><use href="#icon-phone"></use></svg> Call Support
+                </button>
+                <button type="button" class="btn btn-outline small" data-toast="Live location shared">
+                  <svg class="icon"><use href="#icon-pin"></use></svg> Share Location
+                </button>
+                <button type="button" class="btn btn-outline small" data-open-overlay="chatDrawer">
+                  <svg class="icon"><use href="#icon-message"></use></svg> Chat
+                </button>
+              </div>
+            </article>
+
+            <article class="card" aria-label="Support contacts">
+              <div class="section-head">
+                <span class="micro-label">Support</span>
+                <span class="badge info">24/7</span>
+              </div>
+
+              <div class="list-item" style="padding-left:0;padding-right:0;border-top:0">
+                <div class="item-icon info"><svg class="icon"><use href="#icon-phone"></use></svg></div>
+                <div class="item-main">
+                  <div class="item-title">Support Hotline</div>
+                  <div class="item-desc">+60 12-345 6789</div>
+                </div>
+                <div class="item-side">
+                  <button type="button" class="btn btn-primary small" data-toast="Calling Support Hotline">Call</button>
+                </div>
+              </div>
+
+              <div class="list-item" style="padding-left:0;padding-right:0">
+                <div class="item-icon"><svg class="icon"><use href="#icon-shield"></use></svg></div>
+                <div class="item-main">
+                  <div class="item-title">Admin — Tars</div>
+                  <div class="item-desc">+60 19-876 5432</div>
+                </div>
+                <div class="item-side">
+                  <button type="button" class="btn btn-outline small" data-toast="Calling Admin Tars">Call</button>
+                </div>
+              </div>
+            </article>
+
+            <article class="card" aria-label="Safety checklist">
+              <div class="section-head">
+                <span class="micro-label">Safety Checklist</span>
+                <span class="badge success">Ready</span>
+              </div>
+
+              <div class="checklist">
+                <div class="check-item">
+                  <svg class="icon"><use href="#icon-pin"></use></svg>
+                  <div>
+                    <div class="check-title">Live location sharing enabled</div>
+                    <div class="check-desc">Support can track your position during SOS.</div>
+                  </div>
+                </div>
+
+                <div class="check-item">
+                  <svg class="icon"><use href="#icon-bell"></use></svg>
+                  <div>
+                    <div class="check-title">Push notifications active</div>
+                    <div class="check-desc">FCM + foreground polling fallback.</div>
+                  </div>
+                </div>
+
+                <div class="check-item">
+                  <svg class="icon"><use href="#icon-message"></use></svg>
+                  <div>
+                    <div class="check-title">Support channel connected</div>
+                    <div class="check-desc">Team chat and admin alerts are online.</div>
+                  </div>
+                </div>
+              </div>
+            </article>
+
+            <article class="card sos-banner" aria-label="Team SOS alerts">
+              <div class="section-head">
+                <span class="micro-label">Team SOS Alerts</span>
+                <span class="badge danger">1 active</span>
+              </div>
+
+              <div class="sos-title">
+                <svg class="icon"><use href="#icon-sos"></use></svg> SOS triggered by Hero Danial
+              </div>
+              <p class="hero-copy">Zone KL East • 2 min ago</p>
+
+              <div class="sos-actions">
+                <button type="button" class="btn btn-primary small" data-ack>
+                  <svg class="icon"><use href="#icon-check"></use></svg> Acknowledge
+                </button>
+                <button type="button" class="btn btn-outline small" data-toast="Calling Danial">
+                  <svg class="icon"><use href="#icon-phone"></use></svg> Call
+                </button>
+                <button type="button" class="btn btn-outline small" data-open-overlay="chatDrawer">
+                  <svg class="icon"><use href="#icon-message"></use></svg> Chat
+                </button>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <!-- SETTINGS -->
+        <section class="screen" id="settings" aria-label="Settings">
+          <div class="stack">
+            <div>
+              <h1 class="page-title">Settings</h1>
+              <p class="page-copy">Driver profile, AI assistant, notifications, appearance, data operations, changelog.</p>
+            </div>
+
+            <article class="card">
+              <div class="section-head">
+                <span class="micro-label">Driver Profile</span>
+                <span class="badge success">HERO</span>
+              </div>
+
+              <div class="profile">
+                <div class="avatar">A</div>
+                <div>
+                  <div class="profile-name">Arif Rahman</div>
+                  <div class="profile-meta">arif@erth.my • Myvi • Selangor South</div>
+                </div>
+              </div>
+
+              <div class="profile-stats">
+                <div class="metric">
+                  <div class="metric-value">3.0319, 101.6841</div>
+                  <div class="metric-label">Home base</div>
+                </div>
+                <div class="metric">
+                  <div class="metric-value">12 pts</div>
+                  <div class="metric-label">Vehicle capacity</div>
+                </div>
+                <div class="metric">
+                  <div class="metric-value">v1.21</div>
+                  <div class="metric-label">App version</div>
+                </div>
+              </div>
+            </article>
+
+            <article class="card">
+              <div class="section-head">
+                <span class="micro-label">AI Assistant</span>
+                <span class="badge info" data-model-badge>minimax-m3:cloud</span>
+              </div>
+
+              <div class="setting-row">
+                <div>
+                  <div class="setting-title">Model provider</div>
+                  <div class="setting-desc">Choose the AI model used for route help and vision questions.</div>
+                </div>
+              </div>
+
+              <div class="model-row" aria-label="AI model provider">
+                <button type="button" class="model-chip active" data-model="minimax-m3:cloud">minimax-m3:cloud</button>
+                <button type="button" class="model-chip" data-model="llama3.2:latest">llama3.2:latest</button>
+                <button type="button" class="model-chip" data-model="qwen2.5:cloud">qwen2.5:cloud</button>
+              </div>
+
+              <div class="setting-row">
+                <div>
+                  <div class="setting-title">Vision photo upload</div>
+                  <div class="setting-desc">Attach pickup photos for AI questions.</div>
+                </div>
+                <button type="button" class="btn btn-outline small" data-vision-upload>
+                  <svg class="icon"><use href="#icon-camera"></use></svg> Upload
+                </button>
+              </div>
+
+              <div class="setting-row">
+                <div>
+                  <div class="setting-title">Daily summary</div>
+                  <div class="setting-desc">AI-generated end-of-day report.</div>
+                </div>
+                <button type="button" class="switch" role="switch" aria-checked="true" aria-label="Daily summary"></button>
+              </div>
+            </article>
+
+            <article class="card">
+              <div class="section-head">
+                <span class="micro-label">Push Notifications</span>
+                <span class="badge success">FCM</span>
+              </div>
+
+              <div class="setting-row">
+                <div>
+                  <div class="setting-title">SOS requests</div>
+                  <div class="setting-desc">Critical emergency alerts</div>
+                </div>
+                <button type="button" class="switch" role="switch" aria-checked="true" aria-label="SOS requests"></button>
+              </div>
+
+              <div class="setting-row">
+                <div>
+                  <div class="setting-title">New orders assigned</div>
+                  <div class="setting-desc">Push when orders are assigned or reassigned</div>
+                </div>
+                <button type="button" class="switch" role="switch" aria-checked="true" aria-label="New orders assigned"></button>
+              </div>
+
+              <div class="setting-row">
+                <div>
+                  <div class="setting-title">Chat mentions</div>
+                  <div class="setting-desc">Team chat @mentions</div>
+                </div>
+                <button type="button" class="switch" role="switch" aria-checked="true" aria-label="Chat mentions"></button>
+              </div>
+
+              <div class="setting-row">
+                <div>
+                  <div class="setting-title">System alerts</div>
+                  <div class="setting-desc">Admin broadcasts and maintenance</div>
+                </div>
+                <button type="button" class="switch" role="switch" aria-checked="true" aria-label="System alerts"></button>
+              </div>
+            </article>
+
+            <article class="card">
+              <div class="section-head">
+                <span class="micro-label">Data Operations</span>
+                <span class="badge info">Progress drawers</span>
+              </div>
+
+              <div class="triple-actions">
+                <button type="button" class="btn btn-outline small" data-geocode>
+                  <svg class="icon"><use href="#icon-map"></use></svg> Geocode
+                </button>
+                <button type="button" class="btn btn-outline small" data-verify>
+                  <svg class="icon"><use href="#icon-check-circle"></use></svg> Verify
+                </button>
+                <button type="button" class="btn btn-outline small" data-open-overlay="onboardingModal">
+                  <svg class="icon"><use href="#icon-info"></use></svg> Tutorial
+                </button>
+              </div>
+            </article>
+
+            <article class="card">
+              <div class="section-head">
+                <span class="micro-label">Appearance</span>
+                <span class="badge info">Neon Cockpit</span>
+              </div>
+
+              <div class="setting-row">
+                <div>
+                  <div class="setting-title">Neon Cockpit theme</div>
+                  <div class="setting-desc">Dark control room with teal glow</div>
+                </div>
+                <button type="button" class="switch" id="neonTheme" role="switch" aria-checked="true" aria-label="Neon Cockpit theme"></button>
+              </div>
+
+              <div class="setting-row">
+                <div>
+                  <div class="setting-title">Reduce motion</div>
+                  <div class="setting-desc">Minimize animation and glow movement</div>
+                </div>
+                <button type="button" class="switch" id="reduceMotion" role="switch" aria-checked="false" aria-label="Reduce motion"></button>
+              </div>
+            </article>
+
+            <article class="card">
+              <div class="section-head">
+                <span class="micro-label">Changelog</span>
+                <span class="badge success">Current v1.21</span>
+              </div>
+
+              <div class="changelog-item">
+                <div class="changelog-top">
+                  <div class="changelog-title">v1.21 — Android Push & Vision AI</div>
+                  <div class="changelog-date">Jul 2026</div>
+                </div>
+                <p class="changelog-copy">
+                  FCM push notifications, Ollama vision upload, address verification fix.
+                </p>
+              </div>
+
+              <div class="changelog-item">
+                <div class="changelog-top">
+                  <div class="changelog-title">v1.14 — Mobile-First UI</div>
+                  <div class="changelog-date">Jun 2026</div>
+                </div>
+                <p class="changelog-copy">
+                  Bottom navigation, premium dark theme, safe-area insets.
+                </p>
+              </div>
+            </article>
+
+            <button type="button" class="btn danger-outline" data-toast="Signed out (demo)">
+              <svg class="icon"><use href="#icon-logout"></use></svg> Sign out
+            </button>
+          </div>
+        </section>
+      </main>
+
+      <!-- Notifications drawer -->
+      <div class="scrim" data-scrim="notifDrawer"></div>
+      <aside class="drawer" id="notifDrawer" aria-label="Notifications">
+        <div class="drawer-header">
+          <div>
+            <div class="drawer-title">Notifications</div>
+            <div class="drawer-sub">SOS, assignments, chat mentions</div>
+          </div>
+          <button type="button" class="icon-btn" data-close-overlay="notifDrawer" aria-label="Close notifications">
+            <svg class="icon"><use href="#icon-x"></use></svg>
+          </button>
+        </div>
+
+        <div class="drawer-body">
+          <button type="button" class="btn btn-outline small" style="width:100%; margin-bottom:12px" data-mark-all-read>
+            <svg class="icon"><use href="#icon-check"></use></svg> Mark all read
+          </button>
+
+          <div id="notifList">
+            <div class="notification-item unread">
+              <div class="item-icon danger"><svg class="icon"><use href="#icon-sos"></use></svg></div>
+              <div>
+                <div class="notification-title">SOS triggered by Hero Danial</div>
+                <div class="notification-desc">Zone KL East • Requires acknowledgement.</div>
+                <div class="notification-time">2 min ago</div>
+              </div>
+            </div>
+
+            <div class="notification-item unread">
+              <div class="item-icon info"><svg class="icon"><use href="#icon-orders"></use></svg></div>
+              <div>
+                <div class="notification-title">New order assigned: ORD-1044</div>
+                <div class="notification-desc">KL Central • 12:05 PM</div>
+                <div class="notification-time">8 min ago</div>
+              </div>
+            </div>
+
+            <div class="notification-item unread">
+              <div class="item-icon"><svg class="icon"><use href="#icon-message"></use></svg></div>
+              <div>
+                <div class="notification-title">Marie mentioned you in Team Chat</div>
+                <div class="notification-desc">“@Arif customer requests before 11am”</div>
+                <div class="notification-time">14 min ago</div>
+              </div>
+            </div>
+
+            <div class="notification-item read">
+              <div class="item-icon"><svg class="icon"><use href="#icon-route"></use></svg></div>
+              <div>
+                <div class="notification-title">Route re-optimized by VROOM</div>
+                <div class="notification-desc">Saved 14 minutes • 8 stops</div>
+                <div class="notification-time">32 min ago</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Chat drawer -->
+      <div class="scrim" data-scrim="chatDrawer"></div>
+      <aside class="drawer" id="chatDrawer" aria-label="Team chat">
+        <div class="drawer-header">
+          <div>
+            <div class="drawer-title">Team Chat</div>
+            <div class="drawer-sub">Support • Admin • Heroes</div>
+          </div>
+          <button type="button" class="icon-btn" data-close-overlay="chatDrawer" aria-label="Close chat">
+            <svg class="icon"><use href="#icon-x"></use></svg>
+          </button>
+        </div>
+
+        <div class="chat-tabs">
+          <button type="button" class="chat-tab active" data-chat-tab="team">Team</button>
+          <button type="button" class="chat-tab" data-chat-tab="ai">AI</button>
+        </div>
+
+        <div class="chat-messages" id="chatMessages">
+          <div class="msg other">
+            <div class="msg-meta">Marie • Support</div>
+            Order ORD-1042 customer requests pickup before 11am.
+          </div>
+
+          <div class="msg me">
+            <div class="msg-meta">Arif • Hero</div>
+            Noted, moving it to first stop.
+          </div>
+
+          <div class="msg ai">
+            <div class="msg-meta">AI • minimax-m3</div>
+            Route optimized: 8 stops, 32.4 km, estimated 2h 05m.
+          </div>
+        </div>
+
+        <div class="drawer-footer">
+          <div class="chat-input-row">
+            <input class="input" id="chatInput" type="text" placeholder="Message Team…" aria-label="Chat message" />
+            <button type="button" class="icon-btn" data-vision-upload aria-label="Attach photo">
+              <svg class="icon"><use href="#icon-camera"></use></svg>
+            </button>
+            <button type="button" class="icon-btn" data-send-chat aria-label="Send message">
+              <svg class="icon"><use href="#icon-send"></use></svg>
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Order bottom sheet -->
+      <div class="scrim" data-scrim="orderSheet"></div>
+      <aside class="sheet" id="orderSheet" aria-label="Order details">
+        <div class="sheet-handle"></div>
+        <div class="sheet-header">
+          <div>
+            <div class="sheet-title" id="sheetOrderId">Order</div>
+            <div class="sheet-sub" id="sheetCustomer">Customer</div>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center">
+            <span class="badge pending" id="sheetStatusBadge">Pending</span>
+            <button type="button" class="icon-btn" data-close-overlay="orderSheet" aria-label="Close order details">
+              <svg class="icon"><use href="#icon-x"></use></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="sheet-body">
+          <div class="card" style="box-shadow:none; margin-bottom:12px">
+            <div class="order-meta">
+              <div class="meta-row"><svg class="icon"><use href="#icon-pin"></use></svg><span id="sheetAddress">Address</span></div>
+              <div class="meta-row"><svg class="icon"><use href="#icon-phone"></use></svg><span id="sheetPhone">Phone</span></div>
+              <div class="meta-row"><svg class="icon"><use href="#icon-target"></use></svg><span id="sheetPoints">0 pts</span></div>
+              <div class="meta-row"><svg class="icon"><use href="#icon-orders"></use></svg><span id="sheetSize">S</span></div>
+              <div class="meta-row"><svg class="icon"><use href="#icon-check-circle"></use></svg><span class="badge warning" id="sheetVerifiedBadge">Unverified</span></div>
+            </div>
+          </div>
+
+          <div class="micro-label" style="margin-bottom:8px">Status Pipeline</div>
+          <div class="status-chips" id="sheetStatusChips"></div>
+        </div>
+
+        <div class="sheet-footer">
+          <div class="order-actions">
+            <button type="button" class="btn btn-outline small" data-toast="Opening navigation">
+              <svg class="icon"><use href="#icon-navigation"></use></svg> Navigate
+            </button>
+            <button type="button" class="btn btn-outline small" data-toast="Opening WhatsApp">
+              <svg class="icon"><use href="#icon-message"></use></svg> WhatsApp
+            </button>
+            <button type="button" class="btn btn-primary small" id="sheetComplete">
+              <svg class="icon"><use href="#icon-check"></use></svg> Mark Completed
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Geocode drawer -->
+      <div class="scrim" data-scrim="geocodeDrawer"></div>
+      <aside class="drawer" id="geocodeDrawer" aria-label="Geocode progress">
+        <div class="drawer-header">
+          <div>
+            <div class="drawer-title">Geocode Progress</div>
+            <div class="drawer-sub">Batch address geocoding</div>
+          </div>
+          <button type="button" class="icon-btn" data-close-overlay="geocodeDrawer" aria-label="Close geocode progress">
+            <svg class="icon"><use href="#icon-x"></use></svg>
+          </button>
+        </div>
+
+        <div class="drawer-body">
+          <div class="card" style="box-shadow:none">
+            <div class="section-head" style="margin-bottom:8px">
+              <span class="micro-label">Batch Geocode</span>
+              <span class="badge info">Malaysia bounds</span>
+            </div>
+            <div class="progress"><span id="geocodeBar" style="width:0%"></span></div>
+            <div class="progress-copy" id="geocodeCopy">Idle</div>
+
+            <div class="summary-badges" id="geocodeBadges" hidden>
+              <span class="badge success">Geocoded: <span id="geocodeOk">0</span></span>
+              <span class="badge danger">Failed: <span id="geocodeFailed">0</span></span>
+            </div>
+
+            <div class="log-list" id="geocodeLog"></div>
+          </div>
+        </div>
+
+        <div class="drawer-footer">
+          <button type="button" class="btn btn-outline" style="width:100%" data-close-overlay="geocodeDrawer">Close</button>
+        </div>
+      </aside>
+
+      <!-- Verification drawer -->
+      <div class="scrim" data-scrim="verifyDrawer"></div>
+      <aside class="drawer" id="verifyDrawer" aria-label="Address verification progress">
+        <div class="drawer-header">
+          <div>
+            <div class="drawer-title">Address Verification</div>
+            <div class="drawer-sub">AI verification progress</div>
+          </div>
+          <button type="button" class="icon-btn" data-close-overlay="verifyDrawer" aria-label="Close verification progress">
+            <svg class="icon"><use href="#icon-x"></use></svg>
+          </button>
+        </div>
+
+        <div class="drawer-body">
+          <div class="card" style="box-shadow:none">
+            <div class="section-head" style="margin-bottom:8px">
+              <span class="micro-label">Verification</span>
+              <span class="badge info" data-model-badge>minimax-m3:cloud</span>
+            </div>
+            <div class="progress"><span id="verifyBar" style="width:0%"></span></div>
+            <div class="progress-copy" id="verifyCopy">Idle</div>
+
+            <div class="summary-badges" id="verifyBadges" hidden>
+              <span class="badge success">Verified: <span id="verifyOk">0</span></span>
+              <span class="badge warning">Unverified: <span id="verifyWarn">0</span></span>
+              <span class="badge danger">Failed: <span id="verifyFailed">0</span></span>
+            </div>
+
+            <div class="log-list" id="verifyLog"></div>
+          </div>
+        </div>
+
+        <div class="drawer-footer">
+          <button type="button" class="btn btn-outline" style="width:100%" data-close-overlay="verifyDrawer">Close</button>
+        </div>
+      </aside>
+
+      <!-- Onboarding modal -->
+      <div class="modal" id="onboardingModal">
+        <div class="card modal-card">
+          <div class="section-head">
+            <span class="micro-label">Tutorial</span>
+            <button type="button" class="icon-btn" data-close-overlay="onboardingModal" aria-label="Close tutorial">
+              <svg class="icon"><use href="#icon-x"></use></svg>
+            </button>
+          </div>
+
+          <h2 class="hero-title">Mobile Control Center</h2>
+          <p class="hero-copy">
+            Dashboard for today’s stops and points. Route for VROOM optimization and 3D map.
+            Orders for the live status pipeline. SOS for emergency alerts. Chat for team and AI support.
+          </p>
+
+          <div class="checklist">
+            <div class="check-item">
+              <svg class="icon"><use href="#icon-dashboard"></use></svg>
+              <div>
+                <div class="check-title">Dashboard</div>
+                <div class="check-desc">Track stops, points, collections, and next pickup.</div>
+              </div>
+            </div>
+            <div class="check-item">
+              <svg class="icon"><use href="#icon-route"></use></svg>
+              <div>
+                <div class="check-title">Route</div>
+                <div class="check-desc">Re-optimize with VROOM, start route, geocode, verify.</div>
+              </div>
+            </div>
+            <div class="check-item">
+              <svg class="icon"><use href="#icon-orders"></use></svg>
+              <div>
+                <div class="check-title">Orders</div>
+                <div class="check-desc">Use PENDING → SCHEDULED → CONFIRMED → BOOKED → COMPLETED.</div>
+              </div>
+            </div>
+            <div class="check-item">
+              <svg class="icon"><use href="#icon-sos"></use></svg>
+              <div>
+                <div class="check-title">SOS & Chat</div>
+                <div class="check-desc">Alert support, share location, and message team/AI.</div>
+              </div>
+            </div>
+          </div>
+
+          <button type="button" class="btn btn-primary" style="width:100%; margin-top:14px" data-close-overlay="onboardingModal">
+            Got it
+          </button>
+        </div>
+      </div>
+
+      <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+      <nav class="bottom-nav" aria-label="Bottom navigation">
+        <div class="nav-grid">
+          <button type="button" class="nav-btn active" data-target="dashboard" aria-label="Dashboard">
+            <svg class="icon"><use href="#icon-dashboard"></use></svg>
+            Dashboard
+          </button>
+
+          <button type="button" class="nav-btn" data-target="route" aria-label="Route">
+            <svg class="icon"><use href="#icon-route"></use></svg>
+            Route
+          </button>
+
+          <button type="button" class="nav-btn" data-target="orders" aria-label="Orders">
+            <svg class="icon"><use href="#icon-orders"></use></svg>
+            Orders
+          </button>
+
+          <button type="button" class="nav-btn" data-target="sos" aria-label="SOS">
+            <svg class="icon"><use href="#icon-sos"></use></svg>
+            SOS
+          </button>
+
+          <button type="button" class="nav-btn" data-target="settings" aria-label="Settings">
+            <svg class="icon"><use href="#icon-settings"></use></svg>
+            Settings
+          </button>
+        </div>
+      </nav>
+    </div>
+  </div>
+
+  <script>
+    const splash = document.getElementById('splash');
+    const main = document.getElementById('main');
+    const toast = document.getElementById('toast');
+    let toastTimer;
+
+    let completedCount = 5;
+    let pointsCount = 15;
+    let notifCount = 3;
+    let sosActive = false;
+    let currentChatMode = 'team';
+    let currentModel = 'minimax-m3:cloud';
+    let currentOrderCard = null;
+    let activeOrderFilter = 'all';
+
+    const ALL_STATUSES = ['PENDING', 'SCHEDULED', 'CONFIRMED', 'BOOKED', 'COMPLETED', 'CANCELED'];
+
+    function showToast(message) {
+      if (!toast) return;
+      toast.textContent = message;
+      toast.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove('show'), 2300);
+    }
+
+    function showScreen(id) {
+      const screen = document.getElementById(id);
+      if (!screen) return;
+
+      document.querySelectorAll('.screen').forEach((screenEl) => {
+        screenEl.classList.toggle('active', screenEl.id === id);
+      });
+
+      document.querySelectorAll('.nav-btn').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.target === id);
+      });
+
+      if (main) main.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function openOverlay(id) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.classList.add('open');
+      const scrim = document.querySelector(`.scrim[data-scrim="${id}"]`);
+      if (scrim) scrim.classList.add('open');
+    }
+
+    function closeOverlay(id) {
+      const el = document.getElementById(id);
+      if (el) el.classList.remove('open');
+      const scrim = document.querySelector(`.scrim[data-scrim="${id}"]`);
+      if (scrim) scrim.classList.remove('open');
+    }
+
+    function updateNotifBadge() {
+      document.querySelectorAll('[data-notif-badge]').forEach((badge) => {
+        if (notifCount > 0) {
+          badge.hidden = false;
+          badge.textContent = String(notifCount);
+        } else {
+          badge.hidden = true;
+        }
+      });
+    }
+
+    function addNotification(icon, variant, title, desc, time = 'Just now') {
+      const list = document.getElementById('notifList');
+      if (!list) return;
+
+      const item = document.createElement('div');
+      item.className = 'notification-item unread';
+
+      const iconWrap = document.createElement('div');
+      iconWrap.className = `item-icon ${variant || ''}`;
+      iconWrap.innerHTML = `<svg class="icon"><use href="#${icon}"></use></svg>`;
+
+      const body = document.createElement('div');
+      const titleEl = document.createElement('div');
+      titleEl.className = 'notification-title';
+      titleEl.textContent = title;
+
+      const descEl = document.createElement('div');
+      descEl.className = 'notification-desc';
+      descEl.textContent = desc;
+
+      const timeEl = document.createElement('div');
+      timeEl.className = 'notification-time';
+      timeEl.textContent = time;
+
+      body.appendChild(titleEl);
+      body.appendChild(descEl);
+      body.appendChild(timeEl);
+
+      item.appendChild(iconWrap);
+      item.appendChild(body);
+
+      list.prepend(item);
+      notifCount += 1;
+      updateNotifBadge();
+    }
+
+    function markAllNotificationsRead() {
+      document.querySelectorAll('.notification-item').forEach((item) => {
+        item.classList.remove('unread');
+        item.classList.add('read');
+      });
+      notifCount = 0;
+      updateNotifBadge();
+      showToast('All notifications marked read');
+    }
+
+    function statusLabel(status) {
+      return status.charAt(0) + status.slice(1).toLowerCase();
+    }
+
+    function updateStats() {
+      const completedStat = document.getElementById('completedStat');
+      const pointsStat = document.getElementById('pointsStat');
+      if (completedStat) completedStat.textContent = String(completedCount);
+      if (pointsStat) pointsStat.textContent = `${pointsCount}/20`;
+    }
+
+    function setOrderStatus(card, status) {
+      if (!card) return;
+
+      if (status === 'COMPLETED' && card.dataset.completed !== 'true') {
+        completedCount += 1;
+        const addPoints = parseInt(card.dataset.points || '1', 10);
+        pointsCount = Math.min(20, pointsCount + addPoints);
+        card.dataset.completed = 'true';
+        updateStats();
+      }
+
+      card.dataset.status = status;
+
+      const badge = card.querySelector('[data-status-badge]');
+      if (badge) {
+        badge.className = `badge ${status.toLowerCase()}`;
+        badge.textContent = statusLabel(status);
+      }
+
+      card.querySelectorAll('[data-complete-order]').forEach((btn) => {
+        if (status === 'COMPLETED') {
+          btn.disabled = true;
+          btn.innerHTML = '<svg class="icon"><use href="#icon-check"></use></svg> Done';
+        }
+      });
+
+      if (currentOrderCard === card) {
+        renderSheetStatus(status);
+        updateSheetComplete();
+      }
+
+      applyOrderFilters();
+      showToast(`Order status set to ${statusLabel(status)}`);
+    }
+
+    function renderStatusChips(status) {
+      const container = document.getElementById('sheetStatusChips');
+      if (!container) return;
+      container.innerHTML = '';
+
+      ALL_STATUSES.forEach((s) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `status-chip ${s === status ? 'active' : ''}`;
+        btn.dataset.status = s;
+        btn.textContent = statusLabel(s);
+        container.appendChild(btn);
+      });
+    }
+
+    function renderSheetStatus(status) {
+      const badge = document.getElementById('sheetStatusBadge');
+      if (badge) {
+        badge.className = `badge ${status.toLowerCase()}`;
+        badge.textContent = statusLabel(status);
+      }
+      renderStatusChips(status);
+    }
+
+    function updateSheetComplete() {
+      const btn = document.getElementById('sheetComplete');
+      if (!btn || !currentOrderCard) return;
+      const completed = currentOrderCard.dataset.status === 'COMPLETED';
+      btn.disabled = completed;
+      btn.innerHTML = completed
+        ? '<svg class="icon"><use href="#icon-check"></use></svg> Completed'
+        : '<svg class="icon"><use href="#icon-check"></use></svg> Mark Completed';
+    }
+
+    function openOrderSheet(card) {
+      currentOrderCard = card;
+
+      document.getElementById('sheetOrderId').textContent = card.dataset.orderId || 'Order';
+      document.getElementById('sheetCustomer').textContent = card.dataset.customer || '';
+      document.getElementById('sheetAddress').textContent = card.dataset.address || '';
+      document.getElementById('sheetPhone').textContent = card.dataset.phone || '';
+      document.getElementById('sheetPoints').textContent = `${card.dataset.points || '0'} pts`;
+      document.getElementById('sheetSize').textContent = `Size: ${card.dataset.size || 'S'}`;
+
+      const verified = card.dataset.verified === 'true';
+      const verifiedBadge = document.getElementById('sheetVerifiedBadge');
+      verifiedBadge.className = `badge ${verified ? 'success' : 'warning'}`;
+      verifiedBadge.textContent = verified ? 'Verified' : 'Unverified';
+
+      renderSheetStatus(card.dataset.status || 'PENDING');
+      updateSheetComplete();
+      openOverlay('orderSheet');
+    }
+
+    function applyOrderFilters() {
+      const query = (document.getElementById('orderSearch')?.value || '').toLowerCase();
+
+      document.querySelectorAll('#orders .order-card').forEach((card) => {
+        const status = card.dataset.status;
+        const isNew = card.dataset.new === 'true';
+
+        const matchesFilter =
+          activeOrderFilter === 'all' ||
+          (activeOrderFilter === 'new' && isNew) ||
+          (activeOrderFilter === status);
+
+        const text = card.textContent.toLowerCase();
+        const matchesQuery = !query || text.includes(query);
+
+        card.style.display = matchesFilter && matchesQuery ? '' : 'none';
+      });
+    }
+
+    function appendChatMessage(kind, meta, text) {
+      const wrap = document.createElement('div');
+      wrap.className = `msg ${kind}`;
+
+      const metaEl = document.createElement('div');
+      metaEl.className = 'msg-meta';
+      metaEl.textContent = meta;
+
+      const bodyEl = document.createElement('div');
+      bodyEl.textContent = text;
+
+      wrap.appendChild(metaEl);
+      wrap.appendChild(bodyEl);
+
+      const messages = document.getElementById('chatMessages');
+      messages.appendChild(wrap);
+      messages.scrollTop = messages.scrollHeight;
+    }
+
+    function setChatMode(mode) {
+      currentChatMode = mode;
+      const input = document.getElementById('chatInput');
+
+      document.querySelectorAll('[data-chat-tab]').forEach((tab) => {
+        tab.classList.toggle('active', tab.dataset.chatTab === mode);
+      });
+
+      if (input) {
+        input.placeholder = mode === 'ai' ? 'Ask AI about route, orders, address…' : 'Message Team…';
+      }
+    }
+
+    function sendChat() {
+      const input = document.getElementById('chatInput');
+      const text = input.value.trim();
+      if (!text) return;
+
+      appendChatMessage('me', 'Arif • Hero', text);
+      input.value = '';
+
+      setTimeout(() => {
+        if (currentChatMode === 'ai') {
+          appendChatMessage('ai', `AI • ${currentModel}`, 'Route optimized: 8 stops, 32.4 km, estimated 2h 05m. Next stop: Nurul Ain, Taman Kinrara.');
+        } else {
+          appendChatMessage('other', 'Marie • Support', 'Noted. I updated the support note for ORD-1042.');
+        }
+      }, 700);
+    }
+
+    function updateModelBadges() {
+      document.querySelectorAll('[data-model-badge]').forEach((badge) => {
+        badge.textContent = currentModel;
+      });
+    }
+
+    function addLog(logId, icon, variant, title, desc) {
+      const log = document.getElementById(logId);
+      if (!log) return;
+
+      const item = document.createElement('div');
+      item.className = 'log-item list-item';
+      item.style.borderTop = '0';
+      item.style.padding = '10px 12px';
+
+      const iconWrap = document.createElement('div');
+      iconWrap.className = `item-icon ${variant || ''}`;
+      iconWrap.style.width = '32px';
+      iconWrap.style.height = '32px';
+      iconWrap.style.borderRadius = '10px';
+      iconWrap.innerHTML = `<svg class="icon"><use href="#${icon}"></use></svg>`;
+
+      const body = document.createElement('div');
+      body.className = 'item-main';
+
+      const titleEl = document.createElement('div');
+      titleEl.className = 'item-title';
+      titleEl.textContent = title;
+
+      const descEl = document.createElement('div');
+      descEl.className = 'item-desc';
+      descEl.textContent = desc;
+
+      body.appendChild(titleEl);
+      body.appendChild(descEl);
+
+      item.appendChild(iconWrap);
+      item.appendChild(body);
+
+      log.appendChild(item);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    let geocodeRunning = false;
+    function runGeocode() {
+      if (geocodeRunning) return;
+      geocodeRunning = true;
+      openOverlay('geocodeDrawer');
+
+      const orders = ['ORD-1041', 'ORD-1042', 'ORD-1043', 'ORD-1044', 'ORD-1040', 'ORD-1039', 'ORD-1038', 'ORD-1037'];
+      const bar = document.getElementById('geocodeBar');
+      const copy = document.getElementById('geocodeCopy');
+      const badges = document.getElementById('geocodeBadges');
+      const log = document.getElementById('geocodeLog');
+
+      log.innerHTML = '';
+      badges.hidden = false;
+
+      let done = 0;
+      let ok = 0;
+      let failed = 0;
+
+      const interval = setInterval(() => {
+        if (done >= orders.length) {
+          clearInterval(interval);
+          geocodeRunning = false;
+          copy.textContent = 'Geocoding complete';
+          addNotification('icon-map', 'info', 'Geocoding complete', `${ok} geocoded, ${failed} failed`);
+          showToast('Batch geocoding complete');
+          return;
+        }
+
+        const orderId = orders[done];
+        copy.textContent = `Geocoding ${orderId}... ${done + 1}/${orders.length}`;
+        bar.style.width = `${Math.round(((done + 1) / orders.length) * 100)}%`;
+
+        if (orderId === 'ORD-1038') {
+          failed += 1;
+          addLog('geocodeLog', 'icon-x-circle', 'danger', orderId, 'Failed: address incomplete or not found');
+        } else {
+          ok += 1;
+          addLog('geocodeLog', 'icon-check-circle', '', orderId, `Geocoded • 3.0${Math.floor(Math.random() * 90) + 10}, 101.6${Math.floor(Math.random() * 90) + 10}`);
+        }
+
+        document.getElementById('geocodeOk').textContent = String(ok);
+        document.getElementById('geocodeFailed').textContent = String(failed);
+
+        done += 1;
+      }, 550);
+    }
+
+    let verifyRunning = false;
+    function runVerify() {
+      if (verifyRunning) return;
+      verifyRunning = true;
+      openOverlay('verifyDrawer');
+
+      const orders = ['ORD-1041', 'ORD-1042', 'ORD-1043', 'ORD-1044', 'ORD-1040', 'ORD-1039'];
+      const bar = document.getElementById('verifyBar');
+      const copy = document.getElementById('verifyCopy');
+      const badges = document.getElementById('verifyBadges');
+      const log = document.getElementById('verifyLog');
+
+      log.innerHTML = '';
+      badges.hidden = false;
+
+      let done = 0;
+      let verified = 0;
+      let unverified = 0;
+      let failed = 0;
+
+      const interval = setInterval(() => {
+        if (done >= orders.length) {
+          clearInterval(interval);
+          verifyRunning = false;
+          copy.textContent = 'Verification complete';
+          addNotification('icon-check-circle', '', 'Address verification complete', `${verified} verified, ${unverified} unverified, ${failed} failed`);
+          showToast('Address verification complete');
+          return;
+        }
+
+        const orderId = orders[done];
+        copy.textContent = `Verifying ${orderId}... ${done + 1}/${orders.length}`;
+        bar.style.width = `${Math.round(((done + 1) / orders.length) * 100)}%`;
+
+        if (orderId === 'ORD-1041') {
+          unverified += 1;
+          addLog('verifyLog', 'icon-info', 'warning', orderId, 'Unverified • Low confidence, needs manual check');
+        } else if (orderId === 'ORD-1039') {
+          failed += 1;
+          addLog('verifyLog', 'icon-x-circle', 'danger', orderId, 'Failed • AI provider timeout');
+        } else {
+          verified += 1;
+          addLog('verifyLog', 'icon-check-circle', '', orderId, 'Verified • High confidence, zone matched');
+        }
+
+        document.getElementById('verifyOk').textContent = String(verified);
+        document.getElementById('verifyWarn').textContent = String(unverified);
+        document.getElementById('verifyFailed').textContent = String(failed);
+
+        done += 1;
+      }, 650);
+    }
+
+    let optimizeRunning = false;
+    const optimizeBtn = document.getElementById('optimizeBtn');
+    const optimizeOriginal = optimizeBtn ? optimizeBtn.innerHTML : '';
+
+    function runOptimize() {
+      if (optimizeRunning) return;
+      optimizeRunning = true;
+      showScreen('route');
+
+      const optimizeProgress = document.getElementById('optimizeProgress');
+      const optimizeBar = document.getElementById('optimizeBar');
+      const optimizeCopy = document.getElementById('optimizeCopy');
+
+      if (optimizeBtn) {
+        optimizeBtn.disabled = true;
+        optimizeBtn.innerHTML = '<svg class="icon spin"><use href="#icon-refresh"></use></svg> Optimizing';
+      }
+
+      optimizeProgress.hidden = false;
+      optimizeBar.style.width = '0%';
+      optimizeCopy.textContent = 'Optimizing with VROOM… 0%';
+
+      let pct = 0;
+      const interval = setInterval(() => {
+        pct = Math.min(100, pct + Math.random() * 18);
+        optimizeBar.style.width = `${pct}%`;
+        optimizeCopy.textContent = `Optimizing with VROOM… ${Math.round(pct)}%`;
+
+        if (pct >= 100) {
+          clearInterval(interval);
+          setTimeout(() => {
+            optimizeProgress.hidden = true;
+            if (optimizeBtn) {
+              optimizeBtn.disabled = false;
+              optimizeBtn.innerHTML = optimizeOriginal;
+            }
+            optimizeRunning = false;
+
+            document.getElementById('distanceVal').textContent = '31.8';
+            document.getElementById('durationVal').textContent = '1h 58';
+            document.getElementById('stopsVal').textContent = '8';
+            document.getElementById('loadVal').textContent = '6/12';
+
+            addNotification('icon-route', 'info', 'Route re-optimized', 'VROOM saved 7 minutes on Selangor South loop');
+            showToast('Route re-optimized with VROOM');
+          }, 250);
+        }
+      }, 180);
+    }
+
+    document.addEventListener('click', (event) => {
+      const navTarget = event.target.closest('[data-target]');
+      if (navTarget) showScreen(navTarget.dataset.target);
+
+      const toastTrigger = event.target.closest('[data-toast]');
+      if (toastTrigger) showToast(toastTrigger.dataset.toast);
+
+      const openOverlayBtn = event.target.closest('[data-open-overlay]');
+      if (openOverlayBtn) openOverlay(openOverlayBtn.dataset.openOverlay);
+
+      const closeOverlayBtn = event.target.closest('[data-close-overlay]');
+      if (closeOverlayBtn) closeOverlay(closeOverlayBtn.dataset.closeOverlay);
+
+      const scrim = event.target.closest('.scrim');
+      if (scrim) closeOverlay(scrim.dataset.scrim);
+
+      const modalBackground = event.target.closest('.modal');
+      if (modalBackground && event.target === modalBackground) closeOverlay(modalBackground.id);
+
+      const markAll = event.target.closest('[data-mark-all-read]');
+      if (markAll) markAllNotificationsRead();
+
+      const filterChip = event.target.closest('.filter-chip[data-filter]');
+      if (filterChip) {
+        document.querySelectorAll('.filter-chip[data-filter]').forEach((chip) => chip.classList.remove('active'));
+        filterChip.classList.add('active');
+        activeOrderFilter = filterChip.dataset.filter;
+        applyOrderFilters();
+      }
+
+      const completeBtn = event.target.closest('[data-complete-order]');
+      if (completeBtn) {
+        const card = completeBtn.closest('[data-order-card]');
+        if (card) setOrderStatus(card, 'COMPLETED');
+      }
+
+      const ackBtn = event.target.closest('[data-ack]');
+      if (ackBtn) {
+        const card = ackBtn.closest('.card');
+        if (card) card.style.opacity = '0.62';
+        ackBtn.disabled = true;
+        ackBtn.innerHTML = '<svg class="icon"><use href="#icon-check"></use></svg> Acked';
+        showToast('SOS acknowledged. Support notified.');
+      }
+
+      const modelChip = event.target.closest('.model-chip');
+      if (modelChip) {
+        currentModel = modelChip.dataset.model;
+        document.querySelectorAll('.model-chip').forEach((chip) => chip.classList.remove('active'));
+        modelChip.classList.add('active');
+        updateModelBadges();
+        showToast(`AI model set to ${currentModel}`);
+      }
+
+      const chatTab = event.target.closest('[data-chat-tab]');
+      if (chatTab) setChatMode(chatTab.dataset.chatTab);
+
+      const sendBtn = event.target.closest('[data-send-chat]');
+      if (sendBtn) sendChat();
+
+      const visionBtn = event.target.closest('[data-vision-upload]');
+      if (visionBtn) showToast('Vision photo picker opened');
+
+      const dailySummaryBtn = event.target.closest('[data-daily-summary]');
+      if (dailySummaryBtn) {
+        openOverlay('chatDrawer');
+        setChatMode('ai');
+        appendChatMessage('ai', `AI • ${currentModel}`, 'Daily summary: 8 stops planned, 5 completed, 15/20 points, RM180 collected. Next pickup: Nurul Ain at 10:40 AM, Taman Kinrara. Route ETA 12:15 PM.');
+        showToast('Daily summary generated');
+      }
+
+      const geocodeBtn = event.target.closest('[data-geocode]');
+      if (geocodeBtn) runGeocode();
+
+      const verifyBtn = event.target.closest('[data-verify]');
+      if (verifyBtn) runVerify();
+
+      const startRouteBtn = event.target.closest('[data-start-route]');
+      if (startRouteBtn) {
+        startRouteBtn.disabled = true;
+        startRouteBtn.innerHTML = '<svg class="icon"><use href="#icon-play"></use></svg> Started';
+        addNotification('icon-navigation', 'info', 'Route started', 'Selangor South loop is now active');
+        showToast('Route started');
+      }
+
+      const optimizeTrigger = event.target.closest('[data-optimize]');
+      if (optimizeTrigger) runOptimize();
+
+      const statusChip = event.target.closest('.status-chip');
+      if (statusChip && currentOrderCard) {
+        setOrderStatus(currentOrderCard, statusChip.dataset.status);
+      }
+
+      const sheetComplete = event.target.closest('#sheetComplete');
+      if (sheetComplete && currentOrderCard) {
+        setOrderStatus(currentOrderCard, 'COMPLETED');
+      }
+
+      const orderCard = event.target.closest('[data-order-card]');
+      if (orderCard && !event.target.closest('button') && !event.target.closest('input')) {
+        openOrderSheet(orderCard);
+      }
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' && document.activeElement && document.activeElement.id === 'chatInput') {
+        sendChat();
+      }
+
+      if (event.key === 'Escape') {
+        document.querySelectorAll('.drawer.open, .sheet.open, .modal.open').forEach((el) => {
+          closeOverlay(el.id);
+        });
+      }
+    });
+
+    document.getElementById('orderSearch')?.addEventListener('input', applyOrderFilters);
+
+    document.querySelectorAll('.switch').forEach((switchBtn) => {
+      switchBtn.addEventListener('click', () => {
+        const wasChecked = switchBtn.getAttribute('aria-checked') === 'true';
+        const nextChecked = !wasChecked;
+        switchBtn.setAttribute('aria-checked', String(nextChecked));
+
+        if (switchBtn.id === 'reduceMotion') {
+          document.body.classList.toggle('reduce-motion', nextChecked);
+        }
+
+        if (switchBtn.id === 'neonTheme') {
+          document.body.classList.toggle('neon-off', !nextChecked);
+        }
+      });
+    });
+
+    const sosButton = document.getElementById('sosButton');
+    const sosStatus = document.getElementById('sosStatus');
+    const sosCard = document.getElementById('sosCard');
+
+    if (sosButton) {
+      sosButton.addEventListener('click', () => {
+        sosActive = !sosActive;
+
+        if (sosActive) {
+          sosButton.classList.add('active');
+          sosButton.textContent = 'SOS ACTIVE';
+          sosStatus.className = 'badge danger';
+          sosStatus.textContent = 'Active';
+          sosCard.classList.add('sos-active');
+          addNotification('icon-sos', 'danger', 'SOS alert activated', 'Live location shared with Support');
+          showToast('SOS alert sent to Support with live location');
+        } else {
+          sosButton.classList.remove('active');
+          sosButton.textContent = 'SOS';
+          sosStatus.className = 'badge success';
+          sosStatus.textContent = 'Inactive';
+          sosCard.classList.remove('sos-active');
+          showToast('SOS alert cancelled');
+        }
+      });
+    }
+
+    const routeDate = document.getElementById('routeDate');
+    if (routeDate) {
+      try {
+        routeDate.value = new Date().toISOString().split('T')[0];
+      } catch (error) {
+        // Keep fallback value from markup.
+      }
+    }
+
+    const greetingTitle = document.getElementById('greetingTitle');
+    if (greetingTitle) {
+      const hour = new Date().getHours();
+      const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+      greetingTitle.textContent = `${greeting}, Arif`;
+    }
+
+    const todayLabel = document.getElementById('todayLabel');
+    if (todayLabel) {
+      todayLabel.textContent = new Date().toLocaleDateString('en-MY', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      });
+    }
+
+    updateStats();
+    updateNotifBadge();
+    updateModelBadges();
+    applyOrderFilters();
+    setChatMode('team');
+
+    window.addEventListener('load', () => {
+      setTimeout(() => {
+        if (splash) splash.classList.add('hidden');
+        document.body.classList.remove('loading');
+      }, 1300);
+    });
+  </script>
+</body>
+</html>

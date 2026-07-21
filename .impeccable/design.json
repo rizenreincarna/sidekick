@@ -1,0 +1,255 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2025-11-14T00:00:00+08:00",
+  "title": "Design System: HERO Sidekick",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "Cockpit Teal",
+        "canonical": "oklch(0.7 0.14 180)",
+        "hex": "#00baa2",
+        "tonalRamp": ["oklch(0.13 0.02 180)", "oklch(0.22 0.03 180)", "oklch(0.32 0.05 180)", "oklch(0.45 0.09 180)", "oklch(0.55 0.12 180)", "oklch(0.62 0.13 180)", "oklch(0.7 0.14 180)", "oklch(0.82 0.10 180)"]
+      },
+      "background": {
+        "role": "neutral",
+        "displayName": "Background Void",
+        "canonical": "oklch(0.13 0.02 180)",
+        "hex": "#010a08",
+        "tonalRamp": ["oklch(0.08 0.015 180)", "oklch(0.13 0.02 180)", "oklch(0.17 0.02 180)", "oklch(0.22 0.02 180)", "oklch(0.30 0.025 180)", "oklch(0.45 0.03 180)", "oklch(0.65 0.02 180)", "oklch(0.85 0.01 180)"]
+      },
+      "card": {
+        "role": "neutral",
+        "displayName": "Card Surface",
+        "canonical": "oklch(0.17 0.02 180)",
+        "hex": "#051210",
+        "tonalRamp": ["oklch(0.10 0.015 180)", "oklch(0.13 0.02 180)", "oklch(0.17 0.02 180)", "oklch(0.22 0.025 180)", "oklch(0.30 0.03 180)", "oklch(0.45 0.03 180)", "oklch(0.65 0.02 180)", "oklch(0.85 0.01 180)"]
+      },
+      "foreground": {
+        "role": "neutral",
+        "displayName": "Foreground",
+        "canonical": "oklch(0.93 0.01 180)",
+        "hex": "#e1eae8",
+        "tonalRamp": ["oklch(0.13 0.02 180)", "oklch(0.30 0.02 180)", "oklch(0.45 0.02 180)", "oklch(0.60 0.02 180)", "oklch(0.75 0.015 180)", "oklch(0.85 0.01 180)", "oklch(0.93 0.01 180)", "oklch(0.97 0.005 180)"]
+      },
+      "muted-foreground": {
+        "role": "neutral",
+        "displayName": "Muted Foreground",
+        "canonical": "oklch(0.6 0.02 180)",
+        "hex": "#748481",
+        "tonalRamp": ["oklch(0.20 0.02 180)", "oklch(0.35 0.02 180)", "oklch(0.45 0.02 180)", "oklch(0.6 0.02 180)", "oklch(0.75 0.015 180)", "oklch(0.85 0.01 180)", "oklch(0.93 0.01 180)", "oklch(0.97 0.005 180)"]
+      },
+      "secondary": {
+        "role": "neutral",
+        "displayName": "Secondary / Muted",
+        "canonical": "oklch(0.22 0.02 180)",
+        "hex": "#101e1b",
+        "tonalRamp": ["oklch(0.10 0.015 180)", "oklch(0.15 0.02 180)", "oklch(0.18 0.02 180)", "oklch(0.22 0.02 180)", "oklch(0.30 0.025 180)", "oklch(0.45 0.03 180)", "oklch(0.65 0.02 180)", "oklch(0.85 0.01 180)"]
+      },
+      "accent": {
+        "role": "neutral",
+        "displayName": "Accent Hover",
+        "canonical": "oklch(0.25 0.04 180)",
+        "hex": "#062822",
+        "tonalRamp": ["oklch(0.13 0.02 180)", "oklch(0.18 0.03 180)", "oklch(0.22 0.035 180)", "oklch(0.25 0.04 180)", "oklch(0.32 0.05 180)", "oklch(0.45 0.07 180)", "oklch(0.60 0.09 180)", "oklch(0.80 0.06 180)"]
+      },
+      "border": {
+        "role": "neutral",
+        "displayName": "Border Hairline",
+        "canonical": "oklch(0.28 0.03 180)",
+        "hex": "#172e29",
+        "tonalRamp": ["oklch(0.15 0.02 180)", "oklch(0.22 0.025 180)", "oklch(0.25 0.03 180)", "oklch(0.28 0.03 180)", "oklch(0.35 0.04 180)", "oklch(0.45 0.05 180)", "oklch(0.60 0.05 180)", "oklch(0.80 0.03 180)"]
+      },
+      "destructive": {
+        "role": "primary",
+        "displayName": "Destructive Red",
+        "canonical": "oklch(0.577 0.245 27.325)",
+        "hex": "#e7000b",
+        "tonalRamp": ["oklch(0.20 0.10 27)", "oklch(0.30 0.15 27)", "oklch(0.40 0.20 27)", "oklch(0.50 0.22 27)", "oklch(0.577 0.245 27.325)", "oklch(0.65 0.20 27)", "oklch(0.78 0.14 27)", "oklch(0.90 0.06 27)"]
+      },
+      "chart-magenta": {
+        "role": "tertiary",
+        "displayName": "Chart Magenta",
+        "canonical": "oklch(0.65 0.18 330)",
+        "hex": "#c95fc2",
+        "tonalRamp": ["oklch(0.20 0.08 330)", "oklch(0.30 0.12 330)", "oklch(0.45 0.15 330)", "oklch(0.55 0.17 330)", "oklch(0.65 0.18 330)", "oklch(0.75 0.15 330)", "oklch(0.85 0.10 330)", "oklch(0.93 0.05 330)"]
+      },
+      "chart-amber": {
+        "role": "tertiary",
+        "displayName": "Chart Amber",
+        "canonical": "oklch(0.7 0.15 50)",
+        "hex": "#e77f3e",
+        "tonalRamp": ["oklch(0.20 0.07 50)", "oklch(0.30 0.10 50)", "oklch(0.45 0.13 50)", "oklch(0.58 0.14 50)", "oklch(0.7 0.15 50)", "oklch(0.80 0.12 50)", "oklch(0.88 0.08 50)", "oklch(0.95 0.04 50)"]
+      },
+      "chart-violet": {
+        "role": "tertiary",
+        "displayName": "Chart Violet",
+        "canonical": "oklch(0.65 0.2 280)",
+        "hex": "#7c7910",
+        "tonalRamp": ["oklch(0.20 0.10 280)", "oklch(0.30 0.14 280)", "oklch(0.45 0.18 280)", "oklch(0.55 0.19 280)", "oklch(0.65 0.2 280)", "oklch(0.75 0.16 280)", "oklch(0.85 0.10 280)", "oklch(0.93 0.05 280)"]
+      },
+      "chart-green": {
+        "role": "tertiary",
+        "displayName": "Chart Green",
+        "canonical": "oklch(0.7 0.12 140)",
+        "hex": "#75b168",
+        "tonalRamp": ["oklch(0.20 0.06 140)", "oklch(0.30 0.08 140)", "oklch(0.45 0.10 140)", "oklch(0.58 0.11 140)", "oklch(0.7 0.12 140)", "oklch(0.80 0.10 140)", "oklch(0.88 0.07 140)", "oklch(0.95 0.04 140)"]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Hero brand wordmark and page titles only." },
+      "micro": { "displayName": "Micro (Mono)", "purpose": "Tiniest instrument metadata — compact timestamps, point counts, badge counts, calendar day numbers. Densest readable step; never prose." },
+      "headline": { "displayName": "Headline", "purpose": "Section and card titles." },
+      "title": { "displayName": "Title", "purpose": "Dialog headers, panel headings, list item names." },
+      "body": { "displayName": "Body", "purpose": "All running text, descriptions, list content." },
+      "label": { "displayName": "Label (Mono)", "purpose": "Timestamps, order IDs, coordinates, status badges — instrumentation voice." },
+      "mono": { "displayName": "Mono", "purpose": "Mono inputs and inline data values." }
+    },
+    "shadows": [
+      { "name": "card-sm", "value": "0 1px 2px 0 oklch(0.13 0.02 180 / 0.4)", "purpose": "Faint ambient lift under cards; depth is tonal, this supports it." },
+      { "name": "earth-glow", "value": "0 0 20px oklch(0.7 0.14 180 / 0.15)", "purpose": "Signature soft teal halo around primary-accented elements and the live vehicle orb." },
+      { "name": "focus-ring", "value": "0 0 0 3px oklch(0.7 0.14 180 / 0.5)", "purpose": "Focus-visible ring on inputs and buttons." }
+    ],
+    "motion": [
+      { "name": "pulse-soft", "value": "pulse-soft 2s ease-in-out infinite (opacity 1 → 0.7)", "purpose": "Gentle breathing for live status badges and the live vehicle dot. Marks 'alive'." },
+      { "name": "ease-state", "value": "transition-all 150ms ease-out", "purpose": "Default state-change duration for buttons, inputs, chips." },
+      { "name": "ease-reduced", "value": "opacity crossfade 150ms", "purpose": "Reduced-motion alternative for pulse-soft and entrance reveals." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The single action you want taken. Cockpit Teal fill, the one glowing accent.",
+      "html": "<button class=\"ds-btn-primary\">Optimize Route</button>",
+      "css": ".ds-btn-primary { background: oklch(0.7 0.14 180); color: oklch(0.13 0.02 180); font-family: var(--font-geist-sans), system-ui, sans-serif; font-weight: 500; font-size: 14px; line-height: 1; padding: 8px 16px; height: 36px; border: none; border-radius: 10px; box-shadow: 0 1px 2px oklch(0.13 0.02 180 / 0.4); transition: background 150ms ease-out; cursor: pointer; } .ds-btn-primary:hover { background: oklch(0.7 0.14 180 / 0.9); } .ds-btn-primary:focus-visible { outline: none; box-shadow: 0 0 0 3px oklch(0.7 0.14 180 / 0.5); }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Safe, non-committal control. Muted teal fill, lifts on hover.",
+      "html": "<button class=\"ds-btn-secondary\">Cancel</button>",
+      "css": ".ds-btn-secondary { background: oklch(0.22 0.02 180); color: oklch(0.88 0.01 180); font-family: var(--font-geist-sans), system-ui, sans-serif; font-weight: 500; font-size: 14px; padding: 8px 16px; height: 36px; border: none; border-radius: 10px; transition: background 150ms ease-out; cursor: pointer; } .ds-btn-secondary:hover { background: oklch(0.22 0.02 180 / 0.8); } .ds-btn-secondary:focus-visible { outline: none; box-shadow: 0 0 0 3px oklch(0.7 0.14 180 / 0.5); }"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Border + background control. The quiet alternative.",
+      "html": "<button class=\"ds-btn-outline\">Settings</button>",
+      "css": ".ds-btn-outline { background: oklch(0.13 0.02 180); color: oklch(0.93 0.01 180); font-family: var(--font-geist-sans), system-ui, sans-serif; font-weight: 500; font-size: 14px; padding: 8px 16px; height: 36px; border: 1px solid oklch(0.25 0.03 180); border-radius: 10px; transition: background 150ms ease-out; cursor: pointer; } .ds-btn-outline:hover { background: oklch(0.25 0.04 180); color: oklch(0.93 0.01 180); } .ds-btn-outline:focus-visible { outline: none; border-color: oklch(0.7 0.14 180); box-shadow: 0 0 0 3px oklch(0.7 0.14 180 / 0.5); }"
+    },
+    {
+      "name": "Destructive Button",
+      "kind": "button",
+      "refersTo": "button-destructive",
+      "description": "SOS, delete, undo-complete. The only red. Never primary navigation.",
+      "html": "<button class=\"ds-btn-destructive\">Delete Route</button>",
+      "css": ".ds-btn-destructive { background: oklch(0.577 0.245 27.325); color: #ffffff; font-family: var(--font-geist-sans), system-ui, sans-serif; font-weight: 500; font-size: 14px; padding: 8px 16px; height: 36px; border: none; border-radius: 10px; transition: background 150ms ease-out; cursor: pointer; } .ds-btn-destructive:hover { background: oklch(0.577 0.245 27.325 / 0.9); } .ds-btn-destructive:focus-visible { outline: none; box-shadow: 0 0 0 3px oklch(0.577 0.245 27.325 / 0.4); }"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Raised surface, one tone step above background. Depth is tonal, border is tinted teal hairline.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-card-title\">Today's Route</div><div class=\"ds-card-body\">6 stops · 42 km · est 3h 20m</div></div>",
+      "css": ".ds-card { background: oklch(0.17 0.02 180); color: oklch(0.93 0.01 180); border: 1px solid oklch(0.28 0.03 180); border-radius: 12px; padding: 24px; box-shadow: 0 1px 2px oklch(0.13 0.02 180 / 0.4); display: flex; flex-direction: column; gap: 12px; font-family: var(--font-geist-sans), system-ui, sans-serif; } .ds-card-title { font-weight: 600; font-size: 16px; line-height: 1.3; } .ds-card-body { font-size: 14px; line-height: 1.5; color: oklch(0.6 0.02 180); }"
+    },
+    {
+      "name": "Glass Card (Map Overlay)",
+      "kind": "card",
+      "refersTo": "glass-card",
+      "description": "Glassmorphism reserved for overlay labels floating on the 3D map. Never a default card treatment.",
+      "html": "<div class=\"ds-glass\">Stop 03 · 14:25</div>",
+      "css": ".ds-glass { background: oklch(0.17 0.02 180 / 0.7); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); color: oklch(0.93 0.01 180); border: 1px solid oklch(0.35 0.05 180 / 0.3); border-radius: 12px; padding: 8px 12px; font-family: var(--font-geist-mono), ui-monospace, monospace; font-size: 12px; letter-spacing: 0.04em; }"
+    },
+    {
+      "name": "Input Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "36px field, 30%-alpha teal input background, tinted border. Teal glow on focus.",
+      "html": "<input class=\"ds-input\" placeholder=\"Order ID\" />",
+      "css": ".ds-input { background: oklch(0.25 0.03 180 / 0.3); color: oklch(0.93 0.01 180); border: 1px solid oklch(0.25 0.03 180); border-radius: 10px; padding: 8px 12px; height: 36px; width: 100%; font-family: var(--font-geist-sans), system-ui, sans-serif; font-size: 14px; outline: none; transition: border-color 150ms, box-shadow 150ms; } .ds-input::placeholder { color: oklch(0.6 0.02 180); } .ds-input:focus { border-color: oklch(0.7 0.14 180); box-shadow: 0 0 0 3px oklch(0.7 0.14 180 / 0.5); }"
+    },
+    {
+      "name": "Mono Input (Coordinate)",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Data inputs — coordinates, IDs, plates — use Geist Mono. The font switch signals a fact.",
+      "html": "<input class=\"ds-input-mono\" value=\"3.0510, 101.6234\" />",
+      "css": ".ds-input-mono { background: oklch(0.25 0.03 180 / 0.3); color: oklch(0.93 0.01 180); border: 1px solid oklch(0.25 0.03 180); border-radius: 10px; padding: 8px 12px; height: 36px; width: 100%; font-family: var(--font-geist-mono), ui-monospace, monospace; font-size: 13px; outline: none; transition: border-color 150ms, box-shadow 150ms; } .ds-input-mono:focus { border-color: oklch(0.7 0.14 180); box-shadow: 0 0 0 3px oklch(0.7 0.14 180 / 0.5); }"
+    },
+    {
+      "name": "Status Badge",
+      "kind": "chip",
+      "refersTo": "badge-primary",
+      "description": "Mono uppercase status. Pulse-soft animation marks live states. Caps earn their place — they are real status.",
+      "html": "<span class=\"ds-badge\">COMPLETED</span>",
+      "css": ".ds-badge { background: oklch(0.7 0.14 180); color: oklch(0.13 0.02 180); border-radius: 6px; padding: 2px 8px; font-family: var(--font-geist-mono), ui-monospace, monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; display: inline-flex; align-items: center; }"
+    },
+    {
+      "name": "Live Status Badge (Pulsing)",
+      "kind": "chip",
+      "refersTo": "badge-secondary",
+      "description": "Pulse-soft breathing animation marks 'alive'. Static badges report facts; pulsing badges report life.",
+      "html": "<span class=\"ds-badge-live\">LIVE</span>",
+      "css": ".ds-badge-live { background: oklch(0.22 0.02 180); color: oklch(0.7 0.14 180); border: 1px solid oklch(0.7 0.14 180 / 0.4); border-radius: 6px; padding: 2px 8px; font-family: var(--font-geist-mono), ui-monospace, monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; display: inline-flex; align-items: center; gap: 6px; animation: ds-pulse 2s ease-in-out infinite; } .ds-badge-live::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: oklch(0.7 0.14 180); box-shadow: 0 0 6px oklch(0.7 0.14 180); } @keyframes ds-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } } @media (prefers-reduced-motion: reduce) { .ds-badge-live { animation: none; } }"
+    },
+    {
+      "name": "Two-Tier Header",
+      "kind": "nav",
+      "refersTo": "button-primary",
+      "description": "Brand row over actions row so login/logout never clips on narrow phones. Sticky, notch-aware.",
+      "html": "<header class=\"ds-header\"><div class=\"ds-header-brand\"><div class=\"ds-logo\"></div><span class=\"ds-wordmark\">HERO SIDEKICK</span></div><div class=\"ds-header-actions\"><button class=\"ds-btn-ghost\">Route</button><button class=\"ds-btn-outline\">Settings</button></div></header>",
+      "css": ".ds-header { background: oklch(0.15 0.02 180); border-bottom: 1px solid oklch(0.28 0.03 180); padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; position: sticky; top: 0; } .ds-header-brand { display: flex; align-items: center; gap: 10px; } .ds-logo { width: 32px; height: 32px; border-radius: 8px; background: oklch(0.7 0.14 180); box-shadow: 0 0 20px oklch(0.7 0.14 180 / 0.15); } .ds-wordmark { font-family: var(--font-geist-sans), system-ui, sans-serif; font-weight: 600; font-size: 18px; letter-spacing: -0.02em; color: oklch(0.93 0.01 180); } .ds-header-actions { display: flex; gap: 8px; } .ds-btn-ghost { background: transparent; color: oklch(0.93 0.01 180); border: none; border-radius: 10px; padding: 8px 16px; height: 36px; font-family: var(--font-geist-sans), system-ui, sans-serif; font-size: 14px; cursor: pointer; transition: background 150ms; } .ds-btn-ghost:hover { background: oklch(0.25 0.04 180); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Neon Cockpit",
+    "overview": "HERO Sidekick is a dark control room where a glowing 3D map sits at the center and everything else is instrument-panel typography around it. The driver is the pilot; the cab is the cockpit; the day's route is the mission plotted in light. Teal cyan is the single signature color, the way cockpit gauges glow one hue against black. The whole surface is dark, calm, and legible under low ambient light — then a customer opens a tracking link and the map blooms into a small spectacle.",
+    "keyCharacteristics": [
+      "Dark-only, OKLCH hue 180 (teal/cyan) throughout — the :root IS the dark theme, no light mode",
+      "Single signature accent (primary teal) used sparingly; rarity is the point",
+      "Mono type for labels, timestamps, IDs — instrumentation voice",
+      "Soft accent glows (earth-glow) over heavy shadows; tonal layering over drop shadows",
+      "The 3D map is the hero; UI chrome recedes around it",
+      "Glassmorphism reserved for overlay labels on the map, never as default card treatment"
+    ],
+    "rules": [
+      { "name": "The One Glow Rule", "body": "Cockpit Teal is the only accent that glows. It appears on ≤10% of any screen — a primary button, a focus ring, an active route path. If a second color is glowing, the surface has lost its discipline.", "section": "colors" },
+      { "name": "The Hue-180 Rule", "body": "Every neutral is tinted toward OKLCH hue 180 (teal), never toward gray, warm, or beige. A neutral that reads as flat gray or warm sand is a bug, not a choice.", "section": "colors" },
+      { "name": "The Mono Reports Rule", "body": "Any value a driver reads as data — a time, a coordinate, an order number, a plate — is set in Geist Mono. Prose is sans; data is mono. The font switch is the signal that this is a fact, not copy.", "section": "typography" },
+      { "name": "The No-Eyebrow Rule", "body": "No tiny uppercase tracked eyebrows above every section. Status labels earn their caps because they are real status; decorative kickers are an AI tell and are forbidden.", "section": "typography" },
+      { "name": "The Tonal-First Rule", "body": "Surfaces rise by lightness, not by shadow. Before reaching for a box-shadow, step the background OKLCH lightness up. Shadows support tone; they never replace it.", "section": "elevation" },
+      { "name": "The Glow Is Teal Rule", "body": "The only colored glow is Cockpit Teal at low alpha. A red, amber, or violet glow is a bug — signal colors are solid, not luminous.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do use Cockpit Teal (oklch(0.7 0.14 180)) as the one glowing accent, on ≤10% of any screen.",
+      "Do set every data value — time, coordinate, order ID, plate — in Geist Mono. The font switch signals 'this is a fact'.",
+      "Do convey depth by stepping background lightness (0.13 → 0.15 → 0.17 → 0.22), not by drop shadows.",
+      "Do tint every neutral toward OKLCH hue 180. A neutral that reads gray or beige is wrong.",
+      "Do make the 3D map the hero of any surface it appears on; let UI chrome recede.",
+      "Do use the earth-glow and pulse-soft animation to make active/live elements breathe — that's the 'wow'.",
+      "Do keep mobile touch targets ≥32px and the header two-tier so actions never clip.",
+      "Do respect prefers-reduced-motion with crossfades where cheap, but flair-forward is the default."
+    ],
+    "donts": [
+      "Don't use border-left or border-right greater than 1px as a colored stripe on cards, list items, or alerts. The side-stripe is the most recognizable AI-UI tell. Use fill, glow, or a leading icon instead.",
+      "Don't apply gradient text (background-clip: text + gradient). Use solid Cockpit Teal; emphasize with weight or size.",
+      "Don't use glassmorphism as a default card treatment. Glass cards are for overlay labels on the 3D map only — rare and purposeful.",
+      "Don't add a tiny uppercase tracked eyebrow above every section. Decorative kickers are a 2023-era AI scaffold; reserve caps for real status labels.",
+      "Don't tint neutrals toward gray, warm, or beige. This is not Facebook, not a corporate dashboard, not a 2000s fleet console.",
+      "Don't make the UI cluttered like ZEO Route Planner — function without personality. Every surface should have a spark of the brand.",
+      "Don't use hard, small-blur 2014-app shadows. If a shadow is visible, it's soft and ambient; tone carries the depth.",
+      "Don't make a red, amber, or violet element glow. Only Cockpit Teal glows; signal colors stay solid.",
+      "Don't ship a surface that reads as a generic SaaS template. Self-hosted means self-styled — no default-template design decisions."
+    ]
+  }
+}
