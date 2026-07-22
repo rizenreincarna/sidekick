@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { Shield, Truck, Navigation, Pin, CheckCircle2, Loader2, Clock, Info, Phone, MessageCircle } from "lucide-react";
+import { Shield, Truck, Navigation, Pin, CheckCircle2, Loader2, Clock, Info, Phone, MessageCircle, MapPin, X } from "lucide-react";
 import dynamic from "next/dynamic";
 import type { OptimizedRouteResult, VroomStopDetail, VroomLoadPlan } from "@/lib/vroom";
 
@@ -30,7 +30,10 @@ interface MapStop {
 
 interface TrackingData {
   status: "active" | "completed";
+  driverStopped?: boolean;
+  routeStatus?: string;
   customerName?: string;
+  customerAddress?: string | null;
   customerPosition?: { latitude: number; longitude: number };
   stopNumber?: number;
   plannedEta?: string | null;
@@ -48,7 +51,7 @@ interface TrackingData {
   error?: string;
 }
 
-type TrackState = "scheduled" | "live" | "completed";
+type TrackState = "scheduled" | "live" | "completed" | "stopped";
 
 function convertTrackingToRoute(data: TrackingData): OptimizedRouteResult {
   const stops: VroomStopDetail[] = (data.mapStops || []).map((s, i) => ({
@@ -122,9 +125,11 @@ export function TrackingClient({ token }: { token: string }) {
   const [now, setNow] = useState(Date.now());
   const [toast, setToast] = useState<string | null>(null);
   const [toastTimer, setToastTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
+  const [followDriver, setFollowDriver] = useState(false);
+  const [showAddress, setShowAddress] = useState(false);
 
   useEffect(() => {
-    const interval = setInterval(() => setNow(Date.now()), 30_000);
+    const interval = setInterval(() => setNow(Date.now()), 5_000);
     return () => clearInterval(interval);
   }, []);
 
@@ -152,7 +157,8 @@ export function TrackingClient({ token }: { token: string }) {
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 60_000);
+    // Poll every 5 seconds for near-instant status/GPS updates
+    const interval = setInterval(fetchData, 5_000);
     return () => clearInterval(interval);
   }, [fetchData]);
 
@@ -175,27 +181,36 @@ export function TrackingClient({ token }: { token: string }) {
     }).catch(() => {});
   }, [data?.mapStops]);
 
+  // Derive route from mapStops ONLY. Serialize the stops for stable comparison
+  // so the RouteMap3D init effect doesn't tear down/rebuild the scene on every
+  // GPS poll (each poll creates new array references from JSON.parse).
+  const stopsKey = JSON.stringify(data?.mapStops?.map((s) => ({ s: s.stopNumber, la: s.latitude, lo: s.longitude, c: s.completed, m: s.isMine })));
   const routeData = useMemo(() => {
     if (!data || data.status !== "active" || !data.mapStops) return null;
     return convertTrackingToRoute(data);
-  }, [data]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stopsKey, data?.status]);
 
   const trackingTokens = useMemo(() => {
     if (!data || data.status !== "active" || !data.mapStops) return undefined;
     return buildTrackingTokens(data);
-  }, [data]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stopsKey, data?.status]);
 
   const customerOrderId = data?.stopNumber ? `stop-${data.stopNumber}` : null;
-  const heroProfile = data ? {
+  const heroProfile = useMemo(() => data ? {
     heroName: data.heroName || "Driver",
     plateNumber: data.plateNumber || "",
     vehicleColor: data.vehicleColor || "",
     vehicleModel: data.vehicleModel || "",
-  } : null;
+  } : null,
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  [data?.heroName, data?.plateNumber, data?.vehicleColor, data?.vehicleModel]);
 
   const myStop = data?.mapStops?.find(s => s.isMine);
   const state: TrackState = !data || data.error ? "scheduled"
     : data.status === "completed" ? "completed"
+    : data.driverStopped ? "stopped"
     : data.driverPosition ? "live" : "scheduled";
 
   const plannedDate = data?.plannedEta ? new Date(data.plannedEta) : null;
@@ -232,17 +247,17 @@ export function TrackingClient({ token }: { token: string }) {
     );
   }
 
-  const statusBadgeClass = state === "live" ? "nc-badge nc-badge--success" : state === "completed" ? "nc-badge nc-badge--success" : "nc-badge nc-badge--info";
-  const statusLabel = state === "live" ? "Live" : state === "completed" ? "Completed" : "Scheduled";
+  const statusBadgeClass = state === "live" ? "nc-badge nc-badge--success" : state === "completed" ? "nc-badge nc-badge--success" : state === "stopped" ? "nc-badge nc-badge--danger" : "nc-badge nc-badge--info";
+  const statusLabel = state === "live" ? "Live" : state === "completed" ? "Completed" : state === "stopped" ? "Paused" : "Scheduled";
 
   // Timeline step completion
   const steps = [
     { title: "Order confirmed", desc: `E-waste pickup scheduled for ${data?.routeDate || "today"}.`, done: true },
     { title: "Driver assigned", desc: `${data?.heroName || "Driver"} • ${data?.vehicleModel || "Vehicle"} • ${data?.plateNumber || ""}`, done: true },
-    { title: "Driver en route", desc: "Live location appears when the driver starts the route.", done: state === "completed", current: state === "live" },
+    { title: "Driver en route", desc: state === "stopped" ? "Driver has paused live tracking. They may be switching apps or handling an issue." : "Live location appears when the driver starts the route.", done: state === "completed", current: state === "live" || state === "stopped" },
     { title: "Pickup completed", desc: "Your e-waste items are collected and verified.", done: state === "completed" },
   ];
-  const progressPct = state === "completed" ? 100 : state === "live" ? 62 : 35;
+  const progressPct = state === "completed" ? 100 : state === "live" ? 62 : state === "stopped" ? 50 : 35;
 
   return (
     <div className="nc-shell">
@@ -275,6 +290,44 @@ export function TrackingClient({ token }: { token: string }) {
         {/* Main */}
         <main className="flex-1 overflow-y-auto" style={{ padding: 16, paddingBottom: 116 }}>
           <div className="space-y-3.5">
+            {/* News ticker — continuously running status until pickup completed */}
+            {(() => {
+              const total = data?.mapStops?.length || 1;
+              const stop = data?.stopNumber || 1;
+              const tickerText = state === "completed"
+                ? `✓ Pickup completed${completedDate ? ` at ${formatMY(completedDate)}` : ""}. Thank you for recycling with ERTH. `
+                : state === "stopped"
+                  ? `⚠ Driver has paused live tracking. They may be switching apps or handling an issue. Your pickup is still scheduled — please wait. `
+                : state === "live" && data?.eta
+                  ? `${data.eta.minutes} min estimated arrival • ${data.eta.distanceKm} km away • Stop ${stop} of ${total} • Driver is on the way to ${data?.customerName || "your pickup"}. `
+                  : `Pickup scheduled for ${data?.routeDate || "today"}${plannedDate ? ` at ${formatMY(plannedDate)}` : ""} • Stop ${stop} of ${total} • Live driver location will appear once the route starts. `;
+              return (
+                <div className="nc-ticker" role="status" aria-live="polite" style={state === "stopped" ? { borderColor: "rgba(251,113,133,0.35)" } : undefined}>
+                  <div className="nc-ticker__track" style={{ animationPlayState: state === "completed" ? "paused" : "running" }}>
+                    <span>{tickerText}</span>
+                    <span>{tickerText}</span>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Driver stopped exception banner */}
+            {state === "stopped" && (
+              <div className="nc-card" style={{ padding: 16, borderColor: "rgba(251,113,133,0.35)", background: "rgba(251,113,133,0.06)" }}>
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-xl grid place-items-center shrink-0" style={{ background: "rgba(251,113,133,0.18)", color: "#fb7185" }}>
+                    <Info className="h-5 w-5" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-sm font-extrabold" style={{ color: "#fb7185" }}>Live tracking paused</div>
+                    <div className="text-[0.78rem] mt-1 leading-relaxed" style={{ color: "var(--nc-muted)" }}>
+                      The driver ({data?.heroName || "your driver"}) has stopped sharing their live location. This can happen when switching to another app (like Google Maps) or in case of an emergency. Your pickup is still scheduled — please wait for tracking to resume or contact us if you need help.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* 3D Live Map card */}
             <article className="nc-map-card" aria-label="Live tracking map" style={{ minHeight: 430 }}>
               <div className="absolute inset-0">
@@ -293,93 +346,37 @@ export function TrackingClient({ token }: { token: string }) {
                     selectedOrderId={customerOrderId}
                     etaInfo={data?.eta ?? null}
                     customRoutePath={data?.routePath ?? null}
+                    followDriver={followDriver && state === "live"}
                   />
                 ) : (
-                  <div className="flex h-full items-center justify-center">
+                  <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-4 text-center" style={{ background: "oklch(0.13 0.02 180)" }}>
                     <Loader2 className="h-8 w-8 animate-spin text-emerald-400" />
+                    <p className="text-xs text-muted-foreground">Loading map…</p>
                   </div>
                 )}
               </div>
 
-              <div className="nc-map-chip nc-map-chip--left">3D Live Map</div>
-              <div className="nc-map-chip nc-map-chip--right">
-                {state === "live" ? "Live • Esri Dark" : state === "completed" ? "Pickup done" : "Live location pending"}
-              </div>
-              <div className="absolute right-2.5 bottom-2.5 z-[2] text-[0.56rem] text-white/45" style={{ textShadow: "0 1px 2px rgba(0,0,0,0.8)" }}>
-                © OpenStreetMap contributors · Esri
-              </div>
+              {/* (removed "3D Live Map" chip — it was blocking the map) */}
 
-              {/* ETA panel overlay */}
-              <div className="absolute left-3 right-3 bottom-8 z-[3] nc-card" style={{ padding: 14, borderRadius: 20, background: "rgba(7,11,17,0.84)", backdropFilter: "blur(14px)" }}>
-                {state === "scheduled" && (
-                  <div>
-                    <div className="grid grid-cols-3 gap-2 text-center">
-                      <div>
-                        <div className="text-[1.05rem] font-black">{plannedDate ? formatMY(plannedDate) : "—"}</div>
-                        <div className="nc-micro-label mt-1">Planned arrival</div>
-                      </div>
-                      <div>
-                        <div className="text-[1.05rem] font-black">Stop {data?.stopNumber || 1}</div>
-                        <div className="nc-micro-label mt-1">Of {data?.mapStops?.length || 1} stop{(data?.mapStops?.length || 1) > 1 ? "s" : ""}</div>
-                      </div>
-                      <div>
-                        <div className="text-[1.05rem] font-black">~8 min</div>
-                        <div className="nc-micro-label mt-1">Service time</div>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-center gap-2 mt-3 text-[0.74rem]" style={{ color: "var(--nc-muted)" }}>
-                      <Info className="h-3.5 w-3.5" style={{ color: "var(--nc-primary)" }} />
-                      Live driver location will appear once the route starts.
-                    </div>
-                  </div>
-                )}
 
-                {state === "live" && data?.eta && (
-                  <div>
-                    <div className="grid grid-cols-3 gap-2 text-center">
-                      <div>
-                        <div className="text-[1.05rem] font-black">{data.eta.minutes} min</div>
-                        <div className="nc-micro-label mt-1">Estimated arrival</div>
-                      </div>
-                      <div>
-                        <div className="text-[1.05rem] font-black">{data.eta.distanceKm} km</div>
-                        <div className="nc-micro-label mt-1">Distance away</div>
-                      </div>
-                      <div>
-                        <div className="text-[1.05rem] font-black">Stop {data?.stopNumber || 1}</div>
-                        <div className="nc-micro-label mt-1">Of {data?.mapStops?.length || 1} stop{(data?.mapStops?.length || 1) > 1 ? "s" : ""}</div>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-center gap-2 mt-3 text-[0.74rem]" style={{ color: "var(--nc-muted)" }}>
-                      <Navigation className="h-3.5 w-3.5" style={{ color: "var(--nc-primary)" }} />
-                      Driver is on the way to {data?.customerName || "your pickup"}.
-                    </div>
-                  </div>
-                )}
-
-                {state === "completed" && (
-                  <div>
-                    <div className="grid grid-cols-3 gap-2 text-center">
-                      <div>
-                        <div className="text-[1.05rem] font-black">{completedDate ? formatMY(completedDate) : "—"}</div>
-                        <div className="nc-micro-label mt-1">Completed at</div>
-                      </div>
-                      <div>
-                        <div className="text-[1.05rem] font-black">{myStop?.size || "—"}</div>
-                        <div className="nc-micro-label mt-1">Pickup size</div>
-                      </div>
-                      <div>
-                        <div className="text-[1.05rem] font-black">Done</div>
-                        <div className="nc-micro-label mt-1">Status</div>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-center gap-2 mt-3 text-[0.74rem]" style={{ color: "var(--nc-muted)" }}>
-                      <CheckCircle2 className="h-3.5 w-3.5" style={{ color: "var(--nc-primary)" }} />
-                      This pickup has been completed. Thank you.
-                    </div>
-                  </div>
-                )}
-              </div>
+              {/* Follow-driver toggle (live only) — bottom-right, sits above the map attribution */}
+              {state === "live" && (
+                <button
+                  type="button"
+                  onClick={() => setFollowDriver(v => !v)}
+                  title="Follow the driver on the map"
+                  className="absolute right-3 bottom-12 z-[4] flex items-center gap-1.5 px-3 py-2 rounded-full text-[0.72rem] font-bold transition-all"
+                  style={{
+                    background: followDriver ? "linear-gradient(135deg, var(--nc-primary), var(--nc-teal))" : "rgba(7,11,17,0.84)",
+                    color: followDriver ? "#04110B" : "var(--nc-text)",
+                    border: `1px solid ${followDriver ? "transparent" : "rgba(52,211,153,0.30)"}`,
+                    backdropFilter: "blur(8px)",
+                    boxShadow: followDriver ? "0 0 18px rgba(52,211,153,0.35)" : undefined,
+                  }}
+                >
+                  <Navigation className="h-3.5 w-3.5" />{followDriver ? "Following" : "Follow"}
+                </button>
+              )}
             </article>
 
             {/* Pickup Status timeline */}
@@ -426,8 +423,12 @@ export function TrackingClient({ token }: { token: string }) {
               </div>
               <div className="grid grid-cols-2 gap-2.5">
                 <div className="nc-stat">
-                  <div className="text-[0.94rem] font-extrabold truncate">{data?.customerName || "Your pickup"}</div>
-                  <div className="nc-micro-label mt-1">Pickup location</div>
+                  <button type="button" onClick={() => setShowAddress(true)} className="text-left w-full" title="Tap to view full address">
+                    <div className="text-[0.94rem] font-extrabold truncate">{data?.customerName || "Your pickup"}</div>
+                    <div className="nc-micro-label mt-1 flex items-center gap-1" style={{ color: "var(--nc-primary)" }}>
+                      <MapPin className="h-3 w-3" /> Tap to view full address
+                    </div>
+                  </button>
                 </div>
                 <div className="nc-stat">
                   <div className="text-[0.94rem] font-extrabold">{plannedDate ? formatMY(plannedDate) : "—"}</div>
@@ -456,16 +457,45 @@ export function TrackingClient({ token }: { token: string }) {
                 </div>
               </div>
 
-              {/* Help actions */}
-              <div className="grid grid-cols-2 gap-2 mt-3">
-                <button type="button" className="nc-btn nc-btn--outline nc-btn--small" onClick={() => showToast("Support notified. We will contact you shortly.")}>
-                  <Phone className="h-4 w-4" /> Need help?
-                </button>
-                <button type="button" className="nc-btn nc-btn--primary nc-btn--small" onClick={() => showToast("Thanks! We told the driver you are ready.")}>
-                  <CheckCircle2 className="h-4 w-4" /> I&apos;m ready
-                </button>
-              </div>
             </article>
+
+            {/* Pickup address popup card */}
+            {showAddress && (
+              <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" onClick={() => setShowAddress(false)}>
+                <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }} />
+                <div className="relative w-full max-w-sm nc-card nc-card--glow" onClick={(e) => e.stopPropagation()} style={{ padding: 20 }}>
+                  <button type="button" onClick={() => setShowAddress(false)} className="absolute right-3 top-3 p-1.5 rounded-lg text-muted-foreground hover:bg-white/10 hover:text-foreground" title="Close">
+                    <X className="h-5 w-5" />
+                  </button>
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-9 h-9 rounded-xl grid place-items-center" style={{ background: "linear-gradient(135deg, var(--nc-primary), var(--nc-teal))", color: "#04110B" }}>
+                      <MapPin className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-extrabold">Pickup Address</div>
+                      <div className="text-[0.72rem]" style={{ color: "var(--nc-muted)" }}>Stop {data?.stopNumber || 1} of {data?.mapStops?.length || 1}</div>
+                    </div>
+                  </div>
+                  <div className="rounded-xl border p-3 mb-3" style={{ background: "rgba(52,211,153,0.06)", borderColor: "rgba(52,211,153,0.20)" }}>
+                    <div className="text-[0.625rem] font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--nc-muted)" }}>Customer</div>
+                    <div className="text-[0.9rem] font-bold mb-2">{data?.customerName || "Your pickup"}</div>
+                    <div className="text-[0.625rem] font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--nc-muted)" }}>Full address</div>
+                    <div className="text-[0.86rem] leading-relaxed" style={{ color: "var(--nc-text)" }}>{data?.customerAddress || "Address not available"}</div>
+                  </div>
+                  {data?.customerPosition && (
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${data.customerPosition.latitude},${data.customerPosition.longitude}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-center gap-1.5 w-full rounded-xl px-4 py-3 text-[0.82rem] font-bold transition-colors"
+                      style={{ background: "linear-gradient(135deg, var(--nc-primary), var(--nc-teal))", color: "#04110B" }}
+                    >
+                      <Navigation className="h-4 w-4" /> Open in Google Maps
+                    </a>
+                  )}
+                </div>
+              </div>
+            )}
 
             <div className="text-center text-[0.68rem] leading-relaxed px-1.5" style={{ color: "rgba(139,148,158,0.8)" }}>
               Live tracking is provided by HERO Sidekick for ERTH e-waste pickups.

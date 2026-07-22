@@ -25,8 +25,13 @@ export async function GET(request: NextRequest) {
       queryUserId = targetUserId;
     }
 
-    // Check per-user stats cache
-    const cached = statsCache.get(queryUserId);
+    // Check per-user stats cache. The key includes every param that changes the
+    // result (range / weekOffset / mapDate / mapAll) so cycling weeks always
+    // fetches fresh data instead of returning the previous week's cached stats.
+    const _mapDate = searchParams.get("mapDate");
+    const _mapAll = searchParams.get("mapAll") === "true";
+    const cacheKey = `${queryUserId}:${range}:${weekOffset}:${_mapDate || ""}:${_mapAll ? 1 : 0}`;
+    const cached = statsCache.get(cacheKey);
     if (cached && Date.now() - cached.ts < STATS_CACHE_TTL) {
       return NextResponse.json(cached.data);
     }
@@ -47,7 +52,9 @@ export async function GET(request: NextRequest) {
     const rangeFilter = { gte: rangeStart.toISOString() };
 
     // Selectable week for workload view
-    const selWeekStart = addDays(startOfDay(now), weekOffset * 7);
+    // Align to the Monday of the current week, then slide by whole weeks so the
+    // Zone Coverage grid always shows a clean Mon–Sun week for any offset.
+    const selWeekStart = addDays(startOfWeek(now, { weekStartsOn: 1 }), weekOffset * 7);
     const selWeekEnd = addDays(selWeekStart, 6);
     const selWeekStartStr = format(selWeekStart, "yyyy-MM-dd");
     const selWeekEndStr = format(selWeekEnd, "yyyy-MM-dd");
@@ -242,7 +249,7 @@ export async function GET(request: NextRequest) {
       mappableOrders,
     };
 
-    statsCache.set(queryUserId, { data: result, ts: Date.now() });
+    statsCache.set(cacheKey, { data: result, ts: Date.now() });
     return NextResponse.json(result);
   } catch (error) {
     console.error("[stats] GET error:", error);

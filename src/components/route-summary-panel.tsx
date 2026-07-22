@@ -275,13 +275,13 @@ function LoadBlock({
               return (
                 <li key={s.orderDbId}>
                   <div
-                    className={`flex w-full items-start gap-2.5 px-3 py-2.5 text-left text-xs transition-colors hover:bg-white/5 ${
+                    className={`flex w-full flex-col px-3 py-2.5 text-left text-xs transition-colors hover:bg-white/5 ${
                       selected ? "bg-primary/15 ring-1 ring-inset ring-primary/40" : ""
                     } ${tracking?.completed ? "opacity-60" : ""}`}
                   >
                     <button
                       onClick={() => onSelectStop(s)}
-                      className="flex flex-1 items-start gap-2.5 text-left"
+                      className="flex w-full items-start gap-2.5 text-left"
                     >
                       <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/20 text-[0.625rem] font-bold text-primary">
                         {i + 1}
@@ -310,15 +310,15 @@ function LoadBlock({
                         )}
                       </span>
                     </button>
-                    <div className="flex shrink-0 items-center gap-1">
+                    <div className="flex shrink-0 items-center gap-1.5 mt-2">
                       <a
                         href={gmapsNavUrl(s.latitude, s.longitude)}
                         target="_blank"
                         rel="noopener noreferrer"
                         title={`Navigate to ${s.customerName}`}
-                        className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-white/10 bg-white/5 text-primary transition-colors hover:bg-primary/20 hover:border-primary/40"
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-white/10 bg-white/5 text-primary transition-colors hover:bg-primary/20 hover:border-primary/40"
                       >
-                        <Navigation className="h-3.5 w-3.5" />
+                        <Navigation className="h-5 w-5" />
                       </a>
                       {waUrl && !tracking?.completed && (
                         <a
@@ -326,32 +326,32 @@ function LoadBlock({
                           target="_blank"
                           rel="noopener noreferrer"
                           title={`Send tracking link to ${s.customerName} via WhatsApp`}
-                          className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-emerald-500/20 bg-emerald-500/10 text-emerald-400 transition-colors hover:bg-emerald-500/20"
+                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-emerald-500/20 bg-emerald-500/10 text-emerald-400 transition-colors hover:bg-emerald-500/20"
                         >
-                          <MessageCircle className="h-3.5 w-3.5" />
+                          <MessageCircle className="h-5 w-5" />
                         </a>
                       )}
                       {tracking && !tracking.completed && onMarkComplete && (
                         <button
                           onClick={() => onMarkComplete(s.orderId, tracking.token)}
                           title={`Mark ${s.customerName} as picked up`}
-                          className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-white/10 bg-white/5 text-emerald-400 transition-colors hover:bg-emerald-500/20 hover:border-emerald-500/40"
+                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-white/10 bg-white/5 text-emerald-400 transition-colors hover:bg-emerald-500/20 hover:border-emerald-500/40"
                         >
-                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          <CheckCircle2 className="h-5 w-5" />
                         </button>
                       )}
                       {tracking?.completed && onUndoComplete && (
                         <button
                           onClick={() => onUndoComplete(s.orderId, tracking.token)}
                           title={`Undo — mark ${s.customerName} as not picked up`}
-                          className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-amber-500/20 bg-amber-500/10 text-amber-400 transition-colors hover:bg-amber-500/20 hover:border-amber-500/40"
+                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-amber-500/20 bg-amber-500/10 text-amber-400 transition-colors hover:bg-amber-500/20 hover:border-amber-500/40"
                         >
-                          <RotateCcw className="h-3.5 w-3.5" />
+                          <RotateCcw className="h-5 w-5" />
                         </button>
                       )}
                       {tracking?.completed && !onUndoComplete && (
-                        <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center text-emerald-400">
-                          <CheckCircle2 className="h-3.5 w-3.5" />
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center text-emerald-400">
+                          <CheckCircle2 className="h-5 w-5" />
                         </span>
                       )}
                     </div>
@@ -374,9 +374,9 @@ function LoadBlock({
                 target="_blank"
                 rel="noopener noreferrer"
                 title={`Navigate to ${drop.name}`}
-                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-white/10 bg-white/5 text-primary transition-colors hover:bg-primary/20 hover:border-primary/40"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-white/10 bg-white/5 text-primary transition-colors hover:bg-primary/20 hover:border-primary/40"
               >
-                <Navigation className="h-3.5 w-3.5" />
+                <Navigation className="h-5 w-5" />
               </a>
             </div>
             <div className="flex items-center gap-2">

@@ -12,7 +12,7 @@ model User {
   username         String            @unique
   password         String
   displayName      String?
-  role             Role              @default("HERO")
+  role             Role              @default(HERO)
   isActive         Boolean           @default(true)
   isApproved       Boolean           @default(false)
   twoFactorEnabled Boolean           @default(false)
@@ -263,6 +263,7 @@ model DriverLocation {
   routeDate String?
   updatedAt DateTime @updatedAt
   createdAt DateTime @default(now())
+  source    String?
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, updatedAt])

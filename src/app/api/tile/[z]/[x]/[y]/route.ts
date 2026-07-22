@@ -4,13 +4,13 @@ import path from "path";
 
 // GET /api/tile/[z]/[x]/[y] — Tile proxy with persistent disk cache.
 //
-// Esri Dark Gray Canvas tiles — dark gray background with clearly visible road
-// network. Tiles are cached in-memory AND on disk so they survive restarts and
-// are served instantly after the first fetch.
-// NOTE: Esri uses {z}/{y}/{x} tile ordering (y before x), NOT {z}/{x}/{y}.
+// Uses CARTO dark_matter tiles (OSM-based, full coverage), falling back to
+// Esri Dark Gray Canvas. Tiles are cached in-memory AND on disk.
+// CARTO/OSM uses standard {z}/{x}/{y} ordering. Esri uses {z}/{y}/{x}.
 
 const UPSTREAMS = [
-  "https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+  "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+  "https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
 ];
 
 const TILE_CACHE_DIR = path.join(process.cwd(), "tile-cache");
