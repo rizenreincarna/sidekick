@@ -38,6 +38,7 @@ import { ZONES, STATUS_CONFIG, SIZE_CONFIG, getZoneName, getZoneColor, MAX_DAILY
 import { AiChatPanel, AiSettingsSection } from "@/components/ai-assistant";
 import { VerificationProgressDrawer } from "@/components/verification-progress";
 import { GeocodeProgressDrawer } from "@/components/geocode-progress";
+import { HeroProfileDialog } from "@/components/hero-profile-dialog";
 
 // ============ TYPES ============
 interface Order {
@@ -1652,6 +1653,11 @@ function OrderCard({ order, compact, onRefresh, holidays, offDays, isAdminView, 
               </DialogContent>
             </Dialog>
           )}
+          {onShowTimeline && (
+            <Button size="sm" variant="ghost" className="h-11 w-11 p-0 text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/15" onClick={(e) => { e.stopPropagation(); onShowTimeline(); }} title="Audit trail">
+              <History className="h-5 w-5" />
+            </Button>
+          )}
           {canDelete && (
             <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
               <DialogTrigger asChild>
@@ -2119,46 +2125,28 @@ function MiniBarChart({ data, maxBars = 14 }: { data: Array<{ date: string; crea
 }
 
 // ============ HERO DASHBOARD ============
-function HeroDashboard({ stats, onRefresh, userZones }: { stats: Stats | null; onRefresh: () => void; userZones?: UserZoneData[] }) {
+function HeroDashboard({ stats, onRefresh, userZones, onFilterOrders }: { stats: Stats | null; onRefresh: () => void; userZones?: UserZoneData[]; onFilterOrders?: (status: string) => void }) {
   const { data: session } = useSession();
-  const [zeoLoading, setZeoLoading] = useState(false);
   const [timeRange, setTimeRange] = useState("week");
   const [weekOffset, setWeekOffset] = useState(0);
 
-  const { toast } = useToast();
   const [rangeStats, setRangeStats] = useState<Stats | null>(null);
 
-  // Fetch range-specific stats
+  // Fetch range-specific stats (weekOffset cycles the Zone Coverage week)
   useEffect(() => {
     fetch(`/api/stats?range=${timeRange}&weekOffset=${weekOffset}`).then(r => r.ok ? r.json() : null).then(d => { if (d) setRangeStats(d); }).catch(() => {});
   }, [timeRange, weekOffset]);
 
   const effectiveStats = rangeStats || stats;
 
-  const handleDownloadZeoXlsx = async () => {
-    setZeoLoading(true);
-    try {
-      const todayStr = format(new Date(), "yyyy-MM-dd");
-      const res = await fetch("/api/export/zeo", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date: todayStr }) });
-      if (!res.ok) { const data = await res.json(); throw new Error(data.error || "Failed"); }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a"); a.href = url; a.download = `Zeo_Export_${todayStr}.xlsx`;
-      document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
-      toast({ title: "Zeo export downloaded", description: `Upload this file to Zeo Route Planner for ${todayStr}` });
-    } catch (err: unknown) {
-      toast({ title: "Export failed", description: err instanceof Error ? err.message : "Unknown error", variant: "destructive" });
-    } finally { setZeoLoading(false); }
-  };
-
   if (!effectiveStats) return <div className="text-center py-12 text-muted-foreground">Loading dashboard...</div>;
 
   const statusItems = [
-    { label: "Pending", count: effectiveStats.pendingCount, color: "text-yellow-400", bg: "bg-yellow-500/15", icon: Clock },
-    { label: "Scheduled", count: effectiveStats.scheduledCount, color: "text-cyan-400", bg: "bg-cyan-500/15", icon: Calendar },
-    { label: "Contacted", count: effectiveStats.confirmedCount, color: "text-emerald-400", bg: "bg-emerald-500/15", icon: CheckCircle2 },
-    { label: "Booked", count: effectiveStats.bookedCount, color: "text-amber-400", bg: "bg-amber-500/15", icon: Building2 },
-    { label: "Completed", count: effectiveStats.completedCount, color: "text-emerald-100", bg: "bg-slate-500/15", icon: CheckCircle2 },
+    { label: "Pending", code: "PENDING", count: effectiveStats.pendingCount, color: "text-yellow-400", bg: "bg-yellow-500/15", icon: Clock },
+    { label: "Scheduled", code: "SCHEDULED", count: effectiveStats.scheduledCount, color: "text-cyan-400", bg: "bg-cyan-500/15", icon: Calendar },
+    { label: "Contacted", code: "CONFIRMED", count: effectiveStats.confirmedCount, color: "text-emerald-400", bg: "bg-emerald-500/15", icon: CheckCircle2 },
+    { label: "Booked", code: "BOOKED", count: effectiveStats.bookedCount, color: "text-amber-400", bg: "bg-amber-500/15", icon: Building2 },
+    { label: "Completed", code: "COMPLETED", count: effectiveStats.completedCount, color: "text-emerald-100", bg: "bg-slate-500/15", icon: CheckCircle2 },
   ];
 
   const selSchedule = effectiveStats.selWeekScheduleByDate || effectiveStats.scheduleByDate;
@@ -2171,20 +2159,20 @@ function HeroDashboard({ stats, onRefresh, userZones }: { stats: Stats | null; o
         <TimeRangeSelector range={timeRange} setRange={setTimeRange} />
       </div>
 
-      {/* Status Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        {statusItems.map(({ label, count, color, bg, icon: Icon }) => (
-          <div key={label} className={`rounded-xl border border-white/10 ${bg} p-4 bg-card earth-glow`}>
+      {/* Status Cards — tap a card to jump to Orders pre-filtered by that status */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
+        {statusItems.map(({ label, code, count, color, bg, icon: Icon }) => (
+          <button key={label} type="button" onClick={() => onFilterOrders?.(code)} className={`text-left rounded-xl border border-white/10 ${bg} p-3 sm:p-4 bg-card earth-glow transition-transform active:scale-95 hover:border-primary/40 hover:shadow-[0_0_16px_rgba(52,211,153,0.18)]`}>
             <div className="flex items-center gap-2">
               <Icon className={`h-6 w-6 ${color}`} />
               <div><p className={`text-2xl font-bold ${color}`}>{count}</p><p className="text-xs text-muted-foreground">{label}</p></div>
             </div>
-          </div>
+          </button>
         ))}
       </div>
 
       {/* Range Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
         <div className="rounded-xl border border-white/10 bg-card p-3">
           <p className="text-[0.625rem] text-muted-foreground">Created ({timeRange})</p>
           <p className="text-xl font-bold text-cyan-400">{effectiveStats.createdInRange ?? "—"}</p>
@@ -2211,36 +2199,24 @@ function HeroDashboard({ stats, onRefresh, userZones }: { stats: Stats | null; o
         </div>
       )}
 
-      {/* Today + Route */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="rounded-xl border border-white/10 bg-card earth-glow p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold flex items-center gap-2"><Truck className="h-5 w-5 text-primary" />Today&apos;s Pickups</h3>
-            <Badge variant="outline" className="text-xs border-primary/30 text-primary">{effectiveStats.todayPoints}/{MAX_DAILY_POINTS} pts</Badge>
-          </div>
-          <Progress value={(effectiveStats.todayPoints / MAX_DAILY_POINTS) * 100} className="h-2 mb-3" />
-          {effectiveStats.todayOrders.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-4">No pickups today</p>
-          ) : (
-            <div className="space-y-2 max-h-72 overflow-y-auto">
-              {effectiveStats.todayOrders.map(o => (
-                <div key={o.id} className={o.isEvent ? "pl-2 bg-amber-500/5 rounded-l-md" : o.isErthbox ? "pl-2 bg-emerald-500/5 rounded-l-md" : ""}>
-                  <OrderCard order={o} compact onRefresh={onRefresh} holidays={effectiveStats.holidays} offDays={effectiveStats.offDays} userZones={userZones} />
-                </div>
-              ))}
-            </div>
-          )}
+      {/* Today's Pickups (full width — Route Planning widget removed; Zeo export lives in Schedule tab) */}
+      <div className="rounded-xl border border-white/10 bg-card earth-glow p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-semibold flex items-center gap-2"><Truck className="h-5 w-5 text-primary" />Today&apos;s Pickups</h3>
+          <Badge variant="outline" className="text-xs border-primary/30 text-primary">{effectiveStats.todayPoints}/{MAX_DAILY_POINTS} pts</Badge>
         </div>
-        <div className="space-y-4">
-          <div className="rounded-xl border border-white/10 bg-card earth-glow p-4">
-            <h3 className="font-semibold flex items-center gap-2 mb-3"><Route className="h-5 w-5 text-primary" />Route Planning</h3>
-            <p className="text-sm text-muted-foreground mb-3">Download today&apos;s contacted pickups as an XLSX file for Zeo Route Planner.</p>
-            <Button onClick={handleDownloadZeoXlsx} disabled={zeoLoading} className="w-full gap-2 h-12 bg-muted hover:bg-muted/80 text-foreground px-4 py-3 text-base font-semibold">
-              <FileDown className="h-5 w-5" />{zeoLoading ? "Downloading..." : "Download Zeo Route for Today"}
-            </Button>
+        <Progress value={(effectiveStats.todayPoints / MAX_DAILY_POINTS) * 100} className="h-2 mb-3" />
+        {effectiveStats.todayOrders.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-4">No pickups today</p>
+        ) : (
+          <div className="space-y-2 max-h-72 overflow-y-auto">
+            {effectiveStats.todayOrders.map(o => (
+              <div key={o.id} className={o.isEvent ? "pl-2 bg-amber-500/5 rounded-l-md" : o.isErthbox ? "pl-2 bg-emerald-500/5 rounded-l-md" : ""}>
+                <OrderCard order={o} compact onRefresh={onRefresh} holidays={effectiveStats.holidays} offDays={effectiveStats.offDays} userZones={userZones} />
+              </div>
+            ))}
           </div>
-
-        </div>
+        )}
       </div>
 
       {/* Zone Coverage - 7-day week view (all 7 days always visible) */}
@@ -2261,15 +2237,6 @@ function HeroDashboard({ stats, onRefresh, userZones }: { stats: Stats | null; o
         {/* 7-day grid: always shows the full selected week (Mon–Sun) */}
         <ZoneWeekGrid selSchedule={selSchedule} selWeekStart={effectiveStats.selWeekStart} offDays={effectiveStats.offDays} />
       </div>
-
-      {/* Selectable Week Workload — swipeable horizontal carousel (controlled by weekOffset) */}
-      <SwipeableWeeklyWorkload
-        weekOffset={weekOffset}
-        onWeekChange={setWeekOffset}
-        schedule={selSchedule}
-        weekStart={effectiveStats.selWeekStart}
-        offDays={effectiveStats.offDays}
-      />
 
       {/* Upcoming Holidays */}
       {effectiveStats.holidays.length > 0 && (
@@ -2664,13 +2631,13 @@ function SupportDashboard({ onRefresh, refreshKey, userZones }: { onRefresh: () 
 }
 
 // ============ DASHBOARD TAB (Role Router) ============
-function DashboardTab({ stats, onRefresh, dashboardRefreshKey, userZones }: { stats: Stats | null; onRefresh: () => void; dashboardRefreshKey: number; userZones?: UserZoneData[] }) {
+function DashboardTab({ stats, onRefresh, dashboardRefreshKey, userZones, onFilterOrders }: { stats: Stats | null; onRefresh: () => void; dashboardRefreshKey: number; userZones?: UserZoneData[]; onFilterOrders?: (status: string) => void }) {
   const { data: session } = useSession();
   const role = session?.user?.role;
 
   if (role === "ADMIN") return <AdminDashboard onRefresh={onRefresh} refreshKey={dashboardRefreshKey} userZones={userZones} />;
   if (role === "SUPPORT") return <SupportDashboard onRefresh={onRefresh} refreshKey={dashboardRefreshKey} userZones={userZones} />;
-  return <HeroDashboard stats={stats} onRefresh={onRefresh} userZones={userZones} />;
+  return <HeroDashboard stats={stats} onRefresh={onRefresh} userZones={userZones} onFilterOrders={onFilterOrders} />;
 }
 
 // ============ NEW ORDER TAB ============
@@ -3415,10 +3382,13 @@ function SosTab({ onRefresh, onGoToOrders, userZones }: { onRefresh: () => void;
 }
 
 // ============ ORDERS TAB ============
-function OrdersTab({ orders, onRefresh, holidays, offDays, userZones, onVerifyStart, onGeocodeStart }: { orders: Order[]; onRefresh: () => void; holidays?: Holiday[]; offDays?: OffDay[]; userZones?: UserZoneData[]; onVerifyStart?: (sessionId: string) => void; onGeocodeStart?: (sessionId: string) => void }) {
+function OrdersTab({ orders, onRefresh, holidays, offDays, userZones, onVerifyStart, onGeocodeStart, initialStatusFilter, filterNonce }: { orders: Order[]; onRefresh: () => void; holidays?: Holiday[]; offDays?: OffDay[]; userZones?: UserZoneData[]; onVerifyStart?: (sessionId: string) => void; onGeocodeStart?: (sessionId: string) => void; initialStatusFilter?: string; filterNonce?: number }) {
   const { data: session } = useSession();
   const { toast } = useToast();
   const [filterStatus, setFilterStatus] = useState("ALL");
+  // Apply deep-link status filter dispatched from the dashboard stat cards.
+  // Depends on filterNonce so re-clicking the same status still re-applies it.
+  useEffect(() => { if (initialStatusFilter) setFilterStatus(initialStatusFilter); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [filterNonce]);
   const [filterZone, setFilterZone] = useState("ALL");
   const [filterHero, setFilterHero] = useState("ALL");
   const [searchQuery, setSearchQuery] = useState("");
@@ -3445,6 +3415,10 @@ function OrdersTab({ orders, onRefresh, holidays, offDays, userZones, onVerifySt
   const [showAllOrders, setShowAllOrders] = useState(isSupport);
   const [allOrders, setAllOrders] = useState<Order[]>([]);
   const [loadingAll, setLoadingAll] = useState(false);
+  // Orders fetched by a specific status (used for deep-link + manual status filter)
+  // so the list matches the dashboard count instead of the 100-most-recent cap.
+  const [statusFilteredOrders, setStatusFilteredOrders] = useState<Order[] | null>(null);
+  const [loadingStatusFiltered, setLoadingStatusFiltered] = useState(false);
   const [heroes, setHeroes] = useState<HeroOption[]>([]);
   const [filterDate, setFilterDate] = useState("");
   const [selectMode, setSelectMode] = useState(false);
@@ -3483,7 +3457,20 @@ function OrdersTab({ orders, onRefresh, holidays, offDays, userZones, onVerifySt
     return () => { cancelled = true; };
   }, [showAllOrders, isSupportOrAdmin]);
 
-  const displayOrders = showAllOrders && isSupportOrAdmin ? allOrders : orders;
+  // Fetch all orders of the selected status so the filtered list is complete
+  // (matches the dashboard stat counts). Skipped for the support/admin "all heroes" view.
+  useEffect(() => {
+    if (filterStatus === "ALL" || (isSupportOrAdmin && showAllOrders)) { setStatusFilteredOrders(null); return; }
+    let cancelled = false;
+    setLoadingStatusFiltered(true);
+    fetch(`/api/orders?status=${filterStatus}&limit=200`)
+      .then(r => r.ok ? r.json() : null)
+      .then((d: any) => { if (!cancelled && d?.orders) { setStatusFilteredOrders(d.orders); setLoadingStatusFiltered(false); } })
+      .catch(() => { if (!cancelled) setLoadingStatusFiltered(false); });
+    return () => { cancelled = true; };
+  }, [filterStatus, isSupportOrAdmin, showAllOrders]);
+
+  const displayOrders = (showAllOrders && isSupportOrAdmin) ? allOrders : (filterStatus !== "ALL" && statusFilteredOrders ? statusFilteredOrders : orders);
 
   // Universal search: matches any text-based order field
   const searchLower = searchQuery.toLowerCase().trim();
@@ -7563,6 +7550,11 @@ export default function HomePage() {
   const orders = ordersData?.orders ?? null;
   const { data: holidays, refetch: refetchHolidays } = useFetchData<Holiday[]>("/api/holidays");
   const [activeTab, setActiveTab] = useState("dashboard");
+  // Deep-link from dashboard stat cards → Orders tab pre-filtered by status
+  const [ordersStatusFilter, setOrdersStatusFilter] = useState("ALL");
+  const [ordersFilterNonce, setOrdersFilterNonce] = useState(0);
+  const [heroProfileOpen, setHeroProfileOpen] = useState(false);
+  const goToOrdersWithStatus = (status: string) => { setOrdersStatusFilter(status); setOrdersFilterNonce(n => n + 1); setActiveTab("orders"); };
   const [notifDrawerOpen, setNotifDrawerOpen] = useState(false);
   const [chatDrawerOpen, setChatDrawerOpen] = useState(false);
   const [aiDrawerOpen, setAiDrawerOpen] = useState(false); // kept for future
@@ -7737,10 +7729,10 @@ export default function HomePage() {
           <button type="button" className="nc-action-chip" onClick={refreshAll} aria-label="Refresh data"><RotateCcw className="h-4 w-4" /> Refresh</button>
           <button type="button" className="nc-action-chip" onClick={() => setShowOnboarding(true)}><Info className="h-4 w-4" /> Tutorial</button>
           <button type="button" className="nc-action-chip nc-action-chip--danger" onClick={() => signOut()}><LogOut className="h-4 w-4" /> Logout</button>
-          <div className="nc-action-chip" style={{ cursor: "default" }}>
+          <button type="button" className="nc-action-chip" onClick={() => setHeroProfileOpen(true)} title="Edit hero profile (vehicle, home address)" style={{ cursor: "pointer" }}>
             <UserIcon className="h-4 w-4" />
             <span className="max-w-[90px] truncate">{session.user?.name}</span>
-          </div>
+          </button>
         </div>
       </header>
 
@@ -7793,9 +7785,9 @@ export default function HomePage() {
           </TabsList>
           </div>
 
-          <TabsContent value="dashboard"><div className="animate-fade-in-up"><DashboardTab stats={stats} onRefresh={refreshAll} dashboardRefreshKey={dashboardRefreshKey} userZones={userZones || undefined} /></div></TabsContent>
+          <TabsContent value="dashboard"><div className="animate-fade-in-up"><DashboardTab stats={stats} onRefresh={refreshAll} dashboardRefreshKey={dashboardRefreshKey} userZones={userZones || undefined} onFilterOrders={goToOrdersWithStatus} /></div></TabsContent>
           <TabsContent value="new-order"><div className="animate-fade-in-up"><NewOrderTab onRefresh={refreshAll} onVerifyStart={onVerifyStart} /></div></TabsContent>
-          <TabsContent value="orders"><div className="animate-fade-in-up"><OrdersTab orders={orders || []} onRefresh={refreshAll} holidays={holidays || []} offDays={stats?.offDays} userZones={userZones || undefined} onVerifyStart={onVerifyStart} onGeocodeStart={onGeocodeStart} /></div></TabsContent>
+          <TabsContent value="orders"><div className="animate-fade-in-up"><OrdersTab orders={orders || []} onRefresh={refreshAll} holidays={holidays || []} offDays={stats?.offDays} userZones={userZones || undefined} onVerifyStart={onVerifyStart} onGeocodeStart={onGeocodeStart} initialStatusFilter={ordersStatusFilter} filterNonce={ordersFilterNonce} /></div></TabsContent>
           <TabsContent value="schedule"><div className="animate-fade-in-up"><ScheduleTab stats={stats} orders={orders || []} onRefresh={refreshAll} userZones={userZones || undefined} /></div></TabsContent>
           <TabsContent value="sos"><div className="animate-fade-in-up"><SosTab onRefresh={refreshAll} onGoToOrders={() => setActiveTab("orders")} userZones={userZones || undefined} /></div></TabsContent>
           {session.user?.role === "ADMIN" && (
@@ -7844,6 +7836,7 @@ export default function HomePage() {
       {/* Drawers */}
       <NotificationDrawer open={notifDrawerOpen} onClose={() => setNotifDrawerOpen(false)} session={session} onNavigate={(target) => { if (target === "ai") { setChatInitialMode("ai"); setChatDrawerOpen(true); } else if (target === "chat") { setChatInitialMode("team"); setChatDrawerOpen(true); } else if (target === "orders") setActiveTab("orders"); }} />
       <ChatDrawer open={chatDrawerOpen} onClose={() => setChatDrawerOpen(false)} session={session} aiEnabled={aiEnabled} initialMode={chatInitialMode} />
+      <HeroProfileDialog open={heroProfileOpen} onOpenChange={setHeroProfileOpen} />
       <GeocodeProgressDrawer sessionId={geocodeSessionId} onComplete={() => { setGeocodeSessionId(null); refreshAll(); }} />
       <VerificationProgressDrawer
         open={showVerifyProgress}

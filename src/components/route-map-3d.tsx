@@ -144,6 +144,7 @@ interface Props {
   customerOrderId?: string | null;
   etaInfo?: { minutes: number; distanceKm: number; stopsBefore: number } | null;
   customRoutePath?: [number, number][] | null;
+  followDriver?: boolean;
 }
 
 // Escape user-supplied text before inserting into innerHTML (prevent XSS)
@@ -151,7 +152,7 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-export default function RouteMap3D({ route, onSelectStop, selectedOrderId, heroProfile, driverPosition, routeStatus, trackingTokens, variant = "planner", customerOrderId, etaInfo, customRoutePath }: Props) {
+export default function RouteMap3D({ route, onSelectStop, selectedOrderId, heroProfile, driverPosition, routeStatus, trackingTokens, variant = "planner", customerOrderId, etaInfo, customRoutePath, followDriver }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const labelsRef = useRef<HTMLDivElement>(null);
   const onSelectRef = useRef(onSelectStop);
@@ -167,6 +168,7 @@ export default function RouteMap3D({ route, onSelectStop, selectedOrderId, heroP
   const controlsRef = useRef<OrbitControls | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const driverPosRef = useRef<{ latitude: number; longitude: number } | null>(null);
+  const followDriverRef = useRef(false);
   const routeStatusRef = useRef<string | undefined>(undefined);
   const trackingTokensRef = useRef<Record<string, { token: string; completed: boolean }> | undefined>(undefined);
   // Refs for updating stop marker colors when tracking tokens change
@@ -177,6 +179,7 @@ export default function RouteMap3D({ route, onSelectStop, selectedOrderId, heroP
   routeRef.current = route;
   lockedRef.current = locked;
   driverPosRef.current = driverPosition ?? null;
+  followDriverRef.current = !!followDriver;
   routeStatusRef.current = routeStatus;
   trackingTokensRef.current = trackingTokens;
 
@@ -215,6 +218,8 @@ export default function RouteMap3D({ route, onSelectStop, selectedOrderId, heroP
     };
   }, [route]);
 
+  const [mapError, setMapError] = useState<string | null>(null);
+
   useEffect(() => {
     const mount = mountRef.current;
     const labelsContainer = labelsRef.current;
@@ -249,7 +254,14 @@ export default function RouteMap3D({ route, onSelectStop, selectedOrderId, heroP
       200000
     );
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+    } catch (e) {
+      console.error("[RouteMap3D] WebGL not supported:", e);
+      setMapError("Your browser doesn't support 3D maps (WebGL). Try updating your browser.");
+      return;
+    }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(mount.clientWidth, mount.clientHeight);
     mount.appendChild(renderer.domElement);
@@ -403,7 +415,7 @@ export default function RouteMap3D({ route, onSelectStop, selectedOrderId, heroP
             tex.needsUpdate = true;
           };
           img.onerror = () => {};
-          img.src = `/api/tile/${tz}/${tx}/${ty}.png?v=esri1`;
+          img.src = `/api/tile/${tz}/${tx}/${ty}.png?v=carto2`;
         }
       }
       return { center: pc, width: pw, depth: ph };
@@ -535,7 +547,7 @@ export default function RouteMap3D({ route, onSelectStop, selectedOrderId, heroP
             detailTexDirty = true; // batch: update texture once per frame
           };
           img.onerror = () => {};
-          img.src = `/api/tile/${zoom}/${tx}/${ty}.png?v=esri1`;
+          img.src = `/api/tile/${zoom}/${tx}/${ty}.png?v=carto2`;
         }
       }
       detailTexDirty = true;
@@ -1048,10 +1060,14 @@ export default function RouteMap3D({ route, onSelectStop, selectedOrderId, heroP
       // otherwise animate along the first path (demo mode)
       const gpsPos = driverPosRef.current;
       const isStarted = routeStatusRef.current === "STARTED";
-      if (isStarted && gpsPos) {
-        // Real GPS position
+      const isLive = isStarted && gpsPos;
+      if (isLive) {
+        // Real GPS position — smoothly lerp toward the new fix instead of snapping.
+        // This prevents the orb from "teleporting" every GPS poll and feels continuous.
         const gpsVec = latLonToVector3(gpsPos.latitude, gpsPos.longitude);
-        vehicle.position.set(gpsVec.x, span * 0.03, gpsVec.z);
+        vehicle.position.x += (gpsVec.x - vehicle.position.x) * 0.05;
+        vehicle.position.z += (gpsVec.z - vehicle.position.z) * 0.05;
+        vehicle.position.y = span * 0.03;
         vehicleLabel.worldPos.copy(vehicle.position);
       } else if (firstPath.length > 1) {
         // Animated demo motions along first path
@@ -1069,20 +1085,36 @@ export default function RouteMap3D({ route, onSelectStop, selectedOrderId, heroP
       // Pulsing animation for vehicle, beam, and glow ring
       const pulseT = clock.elapsedTime;
       const pulseScale = 1 + Math.sin(pulseT * 3) * 0.2; // 0.8 - 1.2 scale
-      vehicle.scale.setScalar(pulseScale);
+      // Follow-driver mode: shrink the orb/beam/glow so it doesn't block the screen
+      const followActive = followDriverRef.current && isLive;
+      const orbScale = followActive ? 0.5 : 1;
+      vehicle.scale.setScalar(pulseScale * orbScale);
+
+      // Follow driver: smoothly recenter the camera on the live vehicle position
+      // while keeping the user's zoom/angle (translate both target + camera together).
+      if (followActive) {
+        const dx = vehicle.position.x - controls.target.x;
+        const dz = vehicle.position.z - controls.target.z;
+        const lerp = 0.04; // smoothing factor — lower = more cinematic glide
+        controls.target.x += dx * lerp;
+        controls.target.z += dz * lerp;
+        camera.position.x += dx * lerp;
+        camera.position.z += dz * lerp;
+      }
 
       // Update beam position to follow vehicle + pulse opacity
       beam.position.x = vehicle.position.x;
       beam.position.z = vehicle.position.z;
       beam.position.y = span * 0.03 + beamHeight / 2;
-      (beam.material as THREE.MeshBasicMaterial).opacity = 0.4 + Math.sin(pulseT * 3) * 0.25;
+      beam.scale.setScalar(orbScale);
+      (beam.material as THREE.MeshBasicMaterial).opacity = (0.4 + Math.sin(pulseT * 3) * 0.25) * (followActive ? 0.6 : 1);
 
       // Update glow ring to follow vehicle + pulse
       glowRing.position.x = vehicle.position.x;
       glowRing.position.z = vehicle.position.z;
       glowRing.position.y = 0.5;
       const ringPulse = 1 + Math.sin(pulseT * 3) * 0.4;
-      glowRing.scale.setScalar(ringPulse);
+      glowRing.scale.setScalar(ringPulse * orbScale);
       (glowRing.material as THREE.MeshBasicMaterial).opacity = 0.5 + Math.sin(pulseT * 3) * 0.3;
 
       // hover raycasting
@@ -1202,6 +1234,16 @@ export default function RouteMap3D({ route, onSelectStop, selectedOrderId, heroP
     }
   }, [trackingTokens]);
 
+  if (mapError) {
+    return (
+      <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-4 text-center" style={{ background: "oklch(0.13 0.02 180)", minHeight: 380 }}>
+        <MapPin className="h-8 w-8 text-muted-foreground" />
+        <p className="text-sm font-semibold text-foreground">Map unavailable</p>
+        <p className="text-xs text-muted-foreground max-w-xs">{mapError}</p>
+      </div>
+    );
+  }
+
   return (
     <div
       ref={mountRef}
@@ -1263,10 +1305,10 @@ export default function RouteMap3D({ route, onSelectStop, selectedOrderId, heroP
                 </div>
                 <button
                   onClick={() => onSelectRef.current?.(selectedInfo.stop)}
-                  className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-white/10 hover:text-foreground"
+                  className="shrink-0 rounded-md p-2 text-muted-foreground hover:bg-white/10 hover:text-foreground"
                   title="Close"
                 >
-                  <X className="h-3.5 w-3.5" />
+                  <X className="h-5 w-5" />
                 </button>
               </div>
 
@@ -1359,7 +1401,7 @@ export default function RouteMap3D({ route, onSelectStop, selectedOrderId, heroP
         title={locked ? "Unlock: enable 1-finger map drag" : "Lock: 1-finger scrolls page, 2-finger moves map"}
         aria-label={locked ? "Unlock map controls" : "Lock map controls"}
       >
-        {locked ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
+        {locked ? <Lock className="h-5 w-5" /> : <Unlock className="h-5 w-5" />}
       </button>
 
       {/* Time + Weather badge (bottom-left) */}
@@ -1380,7 +1422,7 @@ export default function RouteMap3D({ route, onSelectStop, selectedOrderId, heroP
         className="pointer-events-none absolute bottom-1 right-2 z-10 text-[0.625rem] text-white/50"
         style={{ textShadow: "0 1px 2px rgba(0,0,0,0.8)" }}
       >
-        © OpenStreetMap contributors · Esri
+        © OpenStreetMap contributors · CARTO
       </div>
     </div>
   );

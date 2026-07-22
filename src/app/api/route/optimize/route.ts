@@ -37,10 +37,23 @@ export async function POST(request: NextRequest) {
     });
 
     if (orders.length === 0) {
+      // Check if there are orders for this date in other states, for a helpful message
+      const anyOrders = await db.order.count({ where: { scheduledDate: date, userId: targetUserId } });
+      const completedToday = await db.order.count({ where: { scheduledDate: date, status: "COMPLETED", userId: targetUserId } });
+      const notGeocoded = await db.order.count({
+        where: { scheduledDate: date, status: { in: ["CONFIRMED", "BOOKED"] }, userId: targetUserId, OR: [{ latitude: null }, { longitude: null }] },
+      });
+      const hint = completedToday > 0
+        ? ` There ${completedToday === 1 ? "is" : "are"} ${completedToday} completed order${completedToday > 1 ? "s" : ""} for this date — all pickups may already be done.`
+        : notGeocoded > 0
+          ? ` Found ${notGeocoded} confirmed/booked order${notGeocoded > 1 ? "s" : ""} without GPS coordinates — geocode them first.`
+          : anyOrders === 0
+            ? " No orders are scheduled for this date. Pick a different date or schedule orders first."
+            : "";
       return NextResponse.json(
         {
           error:
-            "No geocoded confirmed/booked orders found for this date. Geocode and confirm orders first.",
+            `No geocoded confirmed/booked orders found for this date.${hint}`.trim(),
         },
         { status: 400 }
       );

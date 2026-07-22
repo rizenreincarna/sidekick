@@ -11,7 +11,7 @@ import { requireAuth } from "@/lib/session";
 // Body: { minLat, maxLat, minLon, maxLon, zoomLevels?: number[] }
 // Default zoom levels: [10, 13, 14, 15, 16, 17]
 
-const UPSTREAM = "https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}";
+const UPSTREAM = "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png";
 const TILE_CACHE_DIR = path.join(process.cwd(), "tile-cache");
 
 function lonToTileX(lon: number, z: number) {
@@ -35,7 +35,7 @@ async function fetchAndCache(z: number, x: number, y: number): Promise<boolean> 
     // not cached — fetch from Esri
   }
 
-  const url = UPSTREAM.replace("{z}", String(z)).replace("{y}", String(y)).replace("{x}", String(x));
+  const url = UPSTREAM.replace("{z}", String(z)).replace("{x}", String(x)).replace("{y}", String(y));
   try {
     const res = await fetch(url, {
       headers: { "User-Agent": "HERO-Sidekick/1.0 (route planner tile proxy)" },

@@ -28,11 +28,11 @@ interface RouteStop {
 }
 
 // Fetch the ordered stop list for a given user + date from the saved Route record
-async function getRouteStops(userId: string, routeDate: string): Promise<RouteStop[] | null> {
+async function getRouteInfo(userId: string, routeDate: string): Promise<{ stops: RouteStop[] | null; status: string | null }> {
   const route = await db.route.findUnique({
     where: { userId_date: { userId, date: routeDate } },
   });
-  if (!route) return null;
+  if (!route) return { stops: null, status: null };
 
   let routeData: { loads?: { stops?: { orderId?: string; customerName?: string; latitude?: number; longitude?: number; arrival?: number; serviceSeconds?: number; points?: number; size?: string }[] }[] } | null = null;
   try {
@@ -40,7 +40,7 @@ async function getRouteStops(userId: string, routeDate: string): Promise<RouteSt
   } catch {
     return null;
   }
-  if (!routeData?.loads) return null;
+  if (!routeData?.loads) return { stops: null, status: route.status };
 
   // Get all completed tracking links for this route date (to mark completed stops)
   const completedLinks = await db.trackingLink.findMany({
@@ -68,7 +68,7 @@ async function getRouteStops(userId: string, routeDate: string): Promise<RouteSt
       });
     }
   }
-  return stops;
+  return { stops, status: route.status };
 }
 
 // Query OSRM for the travel time (seconds) and distance (meters) along a sequence of coordinates
@@ -120,12 +120,21 @@ export async function GET(
   const plateNumber = heroProfile?.plateNumber || "";
   const vehicleColor = heroProfile?.vehicleColor || "";
 
+  // Fetch the customer's own pickup address (shown only to them on their link)
+  // link.orderId is the human-readable order number, not the DB cuid → query by orderId
+  const order = await db.order.findFirst({
+    where: { orderId: link.orderId, userId: link.userId },
+    select: { address: true, city: true },
+  });
+  const customerAddress = order ? `${order.address}${order.city ? ", " + order.city : ""}` : null;
+
   // If pickup completed, return completion message
   if (link.completedAt) {
     return NextResponse.json({
       status: "completed",
       completedAt: link.completedAt.toISOString(),
       customerName: link.customerName,
+      customerAddress,
       heroName,
       vehicleModel,
       plateNumber,
@@ -140,7 +149,9 @@ export async function GET(
   });
 
   // Get the full route stop sequence
-  const routeStops = await getRouteStops(link.userId, link.routeDate);
+  const routeInfo = await getRouteInfo(link.userId, link.routeDate);
+  const routeStops = routeInfo.stops;
+  const routeStatus = routeInfo.status;
 
   // Determine which stops come before this customer's stop (and are not yet completed)
   const myStopNumber = link.stopNumber;
@@ -252,6 +263,7 @@ export async function GET(
   return NextResponse.json({
     status: "active",
     customerName: link.customerName,
+    customerAddress,
     customerPosition: { latitude: link.latitude, longitude: link.longitude },
     stopNumber: myStopNumber,
     plannedEta: link.plannedEta,
@@ -265,5 +277,9 @@ export async function GET(
     plateNumber,
     vehicleColor,
     routeDate: link.routeDate,
+    // Driver stopped broadcasting (emergency stop): the route was started but
+    // the driver cleared their GPS position. The customer sees an exception banner.
+    driverStopped: routeStatus === "STOPPED",
+    routeStatus,
   });
 }

@@ -89,10 +89,3 @@ data class CpuStats(val overall: Double = 0.0, val count: Int = 1, val load_avg:
 data class MemStats(val total: Long = 0, val used: Long = 0, val available: Long = 0, val percent: Double = 0.0, val swap_percent: Double = 0.0)
 data class DiskStats(val total: Long = 0, val used: Long = 0, val free: Long = 0, val percent: Double = 0.0)
 data class SysInfo(val hostname: String? = null, val os: String? = null, val uptime: String? = null, @SerializedName("uptime_seconds") val uptimeSeconds: Double? = null, @SerializedName("cpu_model") val cpuModel: String? = null)
-
-// Stats history (sparklines) — /api/stats/history
-data class StatsHistoryPoint(
-    val cpu: Double? = null,
-    val mem: Double? = null,
-    val disk: Double? = null,
-)
