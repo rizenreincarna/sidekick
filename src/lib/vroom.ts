@@ -470,6 +470,12 @@ export function solveNearestNeighbor(
     let routeDuration = 0;
     let routeDistance = 0;
 
+    // Determine which drop-off locations are relevant for this vehicle
+    const dropOffs = [
+      { name: "DROP_A", loc: [FIXED_LOCATIONS.DROP_A.longitude, FIXED_LOCATIONS.DROP_A.latitude] as [number, number] },
+      { name: "DROP_B", loc: [FIXED_LOCATIONS.DROP_B.longitude, FIXED_LOCATIONS.DROP_B.latitude] as [number, number] },
+    ];
+
     while (remaining.length) {
       // nearest feasible job
       let bestIdx = -1;
@@ -490,7 +496,43 @@ export function solveNearestNeighbor(
         }
       }
       if (bestIdx === -1) {
-        // can't fit any more on this vehicle
+        // Can't fit any more jobs — if load > 0, route to nearest drop-off,
+        // unload, then continue picking up remaining orders (multi-trip).
+        if (curLoad > 0 && remaining.length > 0) {
+          // Find nearest drop-off
+          let bestDrop = dropOffs[0];
+          let bestDropKm = Infinity;
+          for (const d of dropOffs) {
+            const km = haversineKm(curLoc[1], curLoc[0], d.loc[1], d.loc[0]);
+            if (km < bestDropKm) { bestDropKm = km; bestDrop = d; }
+          }
+          const dropSvc = VEHICLE.serviceTimeDrop * 60;
+          const dropTravel = Math.round((bestDropKm * 1000) / mps);
+          const dropArr = curTime + dropTravel;
+          if (dropArr + dropSvc > twEnd) {
+            // No time for a drop-off trip — mark remaining as unassigned
+            for (const j of remaining) {
+              unassigned.push({ id: j.id, reason: "time-window" });
+              assignedJobIds.add(j.id);
+            }
+            break;
+          }
+          steps.push({
+            type: "job",
+            location: bestDrop.loc,
+            arrival: dropArr,
+            service: dropSvc,
+            load: [curLoad],
+          });
+          curTime = dropArr + dropSvc;
+          curLoc = bestDrop.loc;
+          curLoad = 0; // unloaded
+          routeDuration += dropTravel + dropSvc;
+          routeDistance += Math.round(bestDropKm * 1000);
+          // Continue the while loop — remaining orders can now be picked up
+          continue;
+        }
+        // No load to drop off, or no remaining — can't proceed
         for (const j of remaining) {
           const loc = coordsByIntId.get(j.id) ?? j.location;
           const km = haversineKm(curLoc[1], curLoc[0], loc[1], loc[0]);

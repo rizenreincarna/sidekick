@@ -4,10 +4,11 @@ import { useCallback, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
-import { Loader2, MapPin, Sparkles, ArrowLeft, Route as RouteIcon } from "lucide-react";
+import { Loader2, MapPin, Sparkles, ArrowLeft, Route as RouteIcon, Navigation } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import RouteSummaryPanel from "@/components/route-summary-panel";
+import { NavigationOverlay } from "@/components/navigation-overlay";
 import type { OptimizedRouteResult, VroomStopDetail } from "@/lib/vroom";
 
 // Three.js uses window/document — MUST be imported with ssr: false.
@@ -31,6 +32,7 @@ export default function RoutePlannerClient() {
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [routeStatus, setRouteStatus] = useState<string>("OPTIMIZED");
   const [panelOpen, setPanelOpen] = useState(true);
+  const [navActive, setNavActive] = useState(false);
   const [trackingTokens, setTrackingTokens] = useState<Record<string, { token: string; completed: boolean }>>({});
   const [heroProfile, setHeroProfile] = useState<{ heroName: string; plateNumber: string; vehicleColor: string; vehicleModel: string; homeLatitude?: number | null; homeLongitude?: number | null } | null>(null);
   const [driverPosition, setDriverPosition] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -375,6 +377,16 @@ export default function RoutePlannerClient() {
                 {panelOpen ? "Map" : "Stops"}
               </Button>
             )}
+            {route && routeStatus === "STARTED" && (
+              <Button
+                onClick={() => setNavActive(true)}
+                size="sm"
+                className="gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                <Navigation className="h-4 w-4" />
+                Navigate
+              </Button>
+            )}
           </div>
         </div>
       </header>
@@ -436,6 +448,22 @@ export default function RoutePlannerClient() {
           </aside>
         )}
       </div>
+
+      {/* In-app turn-by-turn navigation overlay */}
+      {navActive && route && driverPosition && (
+        <NavigationOverlay
+          stops={route.loads.flatMap((l) => l.stops).map((s) => ({
+            orderId: s.orderId,
+            customerName: s.customerName,
+            address: s.address,
+            latitude: s.latitude,
+            longitude: s.longitude,
+            phone: s.phone,
+          }))}
+          driverPosition={driverPosition}
+          onClose={() => setNavActive(false)}
+        />
+      )}
     </div>
   );
 }
