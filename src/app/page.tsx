@@ -186,6 +186,55 @@ function getWhatsAppLink(order: Order, template?: string, phonePrefix?: string):
 // ============ CHANGELOG ============
 const CHANGELOG = [
   {
+    version: "v1.26",
+    date: "Jul 2026",
+    title: "Android: Pull-to-Refresh Fix & Settings Changelog",
+    highlights: [
+      "Android: Pull-to-refresh disabled on route optimizer / map pages — dragging the map no longer reloads",
+      "Android: Added AndroidBridge.openSettings() and setPullToRefresh() JS bridges",
+      "Android: App version now dynamic in Settings (reads BuildConfig.VERSION_NAME)",
+      "Android: Settings page now has What's New changelog section at the bottom",
+      "Android: User-agent strings auto-update with version number",
+    ],
+    changes: [],
+  },
+  {
+    version: "v1.25",
+    date: "Jul 2026",
+    title: "Android: GPS Crash Fixed",
+    highlights: [
+      "CRITICAL: Fixed crash loop where enabling GPS then relaunching would crash immediately",
+      "Root cause: startForegroundService called without location permission check — Android 14 throws SecurityException",
+      "Added safeStartGpsTracking() with permission check + try/catch at all 4 call sites",
+      "Fixed onResume auto-restart crash — GPS pref now resets to false when permission missing",
+    ],
+    changes: [],
+  },
+  {
+    version: "v1.24",
+    date: "Jul 2026",
+    title: "Android: Source Audit & Rebuild",
+    highlights: [
+      "Full source audit: all layouts, drawables, colors, IDs, permissions verified present",
+      "Application ID: space.rizen.sidekick, minSdk 24, targetSdk 34",
+      "ProGuard/R8: -keep class space.rizen.sidekick.**",
+    ],
+    changes: [],
+  },
+  {
+    version: "v1.23",
+    date: "Jul 2026",
+    title: "Android: Initial Sidekick Release",
+    highlights: [
+      "WebView-based app loading sidekick.rizen.space",
+      "GPS tracking via foreground service (FusedLocationProviderClient)",
+      "JavaScript bridge: startGpsTracking, stopGpsTracking, isGpsTracking, getAppVersion, showToast",
+      "Settings: server URL, GPS toggle + interval, push notifications",
+      "Deep link support for /track/[token] URLs",
+    ],
+    changes: [],
+  },
+  {
     version: "v1.21",
     date: "Jul 2026",
     title: "Size System Overhaul & Points Increase",
@@ -1164,18 +1213,27 @@ function OrderCard({ order, compact, onRefresh, holidays, offDays, isAdminView, 
   const [reassignTargetId, setReassignTargetId] = useState("");
   const [reassignLoading, setReassignLoading] = useState(false);
 
+  // Optimistic status: reflect the change in the badge instantly without waiting
+  // for the PATCH round-trip + 300ms debounced refetch (which feels laggy on real
+  // networks / production builds). Cleared once the refetched order.status catches up.
+  const [optimisticStatus, setOptimisticStatus] = useState<string | null>(null);
+  useEffect(() => { setOptimisticStatus(null); }, [order.status]);
+  const displayStatus = optimisticStatus ?? order.status;
+
   const updateStatus = async (newStatus: string) => {
     setLoading(true);
+    setOptimisticStatus(newStatus); // instant UI feedback
     try {
       const res = await fetch(`/api/orders/${order.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: newStatus }) });
       if (!res.ok) {
+        setOptimisticStatus(null); // revert on failure
         const err = await res.json().catch(() => ({}));
         toast({ title: "Failed", description: (err as Record<string, string>).error || `Server error ${res.status}`, variant: "destructive" });
         return;
       }
       toast({ title: `${order.orderId} → ${newStatus}` });
       onRefresh();
-    } catch { toast({ title: "Network error", description: "Could not reach server. Check your connection.", variant: "destructive" }); }
+    } catch { setOptimisticStatus(null); toast({ title: "Network error", description: "Could not reach server. Check your connection.", variant: "destructive" }); }
     finally { setLoading(false); }
   };
 
@@ -1261,7 +1319,7 @@ function OrderCard({ order, compact, onRefresh, holidays, offDays, isAdminView, 
   };
 
   const nextStatus: Record<string, string | null> = { PENDING: "SCHEDULED", SCHEDULED: "CONFIRMED", CONFIRMED: "BOOKED", BOOKED: "COMPLETED" };
-  const ns = nextStatus[order.status];
+  const ns = nextStatus[displayStatus];
   // UI-side transition map — any status can be changed to any other status.
   // This gives full flexibility: cancel from any state, restore from cancel to any state.
   const ALL_STATUSES = ["PENDING", "SCHEDULED", "CONFIRMED", "BOOKED", "COMPLETED", "CANCELED"];
@@ -1275,10 +1333,10 @@ function OrderCard({ order, compact, onRefresh, holidays, offDays, isAdminView, 
   };
   const z = ZONES[order.zone];
   const sizeConf = SIZE_CONFIG[order.size] || SIZE_CONFIG.S;
-  const canDelete = order.status !== "COMPLETED" || isAdminView;
-  const canChangeDate = ["PENDING", "SCHEDULED", "CONFIRMED"].includes(order.status);
-  const canSos = ["PENDING", "SCHEDULED"].includes(order.status);
-  const canReassign = isAdminView && heroes && heroes.length > 0 && order.status !== "COMPLETED" && onReassign;
+  const canDelete = displayStatus !== "COMPLETED" || isAdminView;
+  const canChangeDate = ["PENDING", "SCHEDULED", "CONFIRMED"].includes(displayStatus);
+  const canSos = ["PENDING", "SCHEDULED"].includes(displayStatus);
+  const canReassign = isAdminView && heroes && heroes.length > 0 && displayStatus !== "COMPLETED" && onReassign;
 
   return (
     <div role="button" tabIndex={0} aria-label={`Order ${order.orderId} timeline`} className={`card-touch rounded-xl border p-2.5 sm:p-3 ${z?.bgColor || "bg-white/5"} ${z?.borderColor || "border-white/10"} backdrop-blur-sm transition-all active:scale-[0.995] ${selected ? "ring-2 ring-primary/50 border-primary/30" : ""}`} onClick={(e) => { const t = e.target as HTMLElement; if (t.closest("button,a,input,select,textarea,[role=\"button\"],[data-no-timeline]")) return; onShowTimeline?.(); }} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onShowTimeline?.(); } }}>
@@ -1310,7 +1368,7 @@ function OrderCard({ order, compact, onRefresh, holidays, offDays, isAdminView, 
             <ZoneBadge zone={order.zone} compact userZones={userZones} isDisabled={disabledZones?.includes(order.zone)} />{!order.latitude && (<span className="text-[0.625rem] px-1 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30 ml-1" title="No GPS coordinates">⚠</span>)}
             <Dialog open={showStatusDialog} onOpenChange={setShowStatusDialog}>
               <DialogTrigger asChild>
-                <span data-no-timeline role="button" tabIndex={0} className="cursor-pointer hover:opacity-80 transition-opacity" onClick={(e) => e.stopPropagation()}><StatusBadge status={order.status} /></span>
+                <span data-no-timeline role="button" tabIndex={0} className="cursor-pointer hover:opacity-80 transition-opacity" onClick={(e) => e.stopPropagation()}><StatusBadge status={displayStatus} /></span>
               </DialogTrigger>
               <DialogContent className="bg-card border-white/10">
                 <DialogHeader>
@@ -1325,10 +1383,10 @@ function OrderCard({ order, compact, onRefresh, holidays, offDays, isAdminView, 
                         <Button
                           key={s}
                           type="button"
-                          variant={order.status === s ? "default" : "outline"}
-                          className={`h-11 justify-start gap-2 text-sm font-medium ${order.status === s ? "bg-primary text-primary-foreground" : `${conf?.bgColor || "bg-white/5"} ${conf?.color || "text-foreground"} ${conf?.borderColor || "border-white/10"} border hover:bg-white/10`}`}
+                          variant={displayStatus === s ? "default" : "outline"}
+                          className={`h-11 justify-start gap-2 text-sm font-medium ${displayStatus === s ? "bg-primary text-primary-foreground" : `${conf?.bgColor || "bg-white/5"} ${conf?.color || "text-foreground"} ${conf?.borderColor || "border-white/10"} border hover:bg-white/10`}`}
                           onClick={() => { updateStatus(s); setShowStatusDialog(false); }}
-                          disabled={loading || (s !== "CANCELED" && VALID_TRANSITIONS_UI[order.status]?.includes(s) === false && order.status !== s)}
+                          disabled={loading || (s !== "CANCELED" && VALID_TRANSITIONS_UI[displayStatus]?.includes(s) === false && displayStatus !== s)}
                         >
                           {s === "PENDING" && <Clock className="h-4 w-4" />}
                           {s === "SCHEDULED" && <Calendar className="h-4 w-4" />}
@@ -1337,7 +1395,7 @@ function OrderCard({ order, compact, onRefresh, holidays, offDays, isAdminView, 
                           {s === "COMPLETED" && <CheckCircle className="h-4 w-4" />}
                           {s === "CANCELED" && <XCircle className="h-4 w-4" />}
                           {conf?.label || s}
-                          {order.status === s && <span className="ml-auto text-xs opacity-70">Current</span>}
+                          {displayStatus === s && <span className="ml-auto text-xs opacity-70">Current</span>}
                         </Button>
                       );
                     })}
@@ -1442,7 +1500,7 @@ function OrderCard({ order, compact, onRefresh, holidays, offDays, isAdminView, 
           {compact && <p className="text-xs text-muted-foreground mt-0.5">{order.customerName} · {order.city}</p>}
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          {(order.status === "SCHEDULED" || order.status === "CONFIRMED" || order.status === "BOOKED" || order.status === "COMPLETED") && (
+          {(displayStatus === "SCHEDULED" || displayStatus === "CONFIRMED" || displayStatus === "BOOKED" || displayStatus === "COMPLETED") && (
             <Button size="sm" variant="ghost" className="h-11 w-11 p-0 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/15" onClick={() => {
               // Load templates and open dialog
               fetch("/api/settings").then(r => r.json()).then(s => {

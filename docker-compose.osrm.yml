@@ -1,0 +1,23 @@
+# Self-hosted OSRM routing engine for HERO Sidekick in-app navigation.
+#
+# Prerequisite: build the dataset first (see scripts/setup-osrm-malaysia.sh
+# or docs/osrm-setup.md). The .osrm files must exist in ./osrm-data.
+#
+# Start:  docker compose -f docker-compose.osrm.yml up -d
+# Logs:   docker compose -f docker-compose.osrm.yml logs -f
+# Stop:   docker compose -f docker-compose.osrm.yml down
+#
+# NOTE: If you used a different extract name (e.g. klang-valley), adjust the
+# command path below accordingly.
+
+services:
+  osrm:
+    image: osrm/osrm-backend
+    container_name: osrm
+    # Change "malaysia-latest" if you built a different extract.
+    command: osrm-routed --algorithm mld /data/malaysia-latest.osrm
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./osrm-data:/data
+    restart: unless-stopped

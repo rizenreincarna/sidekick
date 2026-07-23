@@ -8,7 +8,6 @@ import { Loader2, MapPin, Sparkles, ArrowLeft, Route as RouteIcon, Navigation } 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import RouteSummaryPanel from "@/components/route-summary-panel";
-import { NavigationOverlay } from "@/components/navigation-overlay";
 import type { OptimizedRouteResult, VroomStopDetail } from "@/lib/vroom";
 
 // Three.js uses window/document — MUST be imported with ssr: false.
@@ -32,7 +31,6 @@ export default function RoutePlannerClient() {
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [routeStatus, setRouteStatus] = useState<string>("OPTIMIZED");
   const [panelOpen, setPanelOpen] = useState(true);
-  const [navActive, setNavActive] = useState(false);
   const [trackingTokens, setTrackingTokens] = useState<Record<string, { token: string; completed: boolean }>>({});
   const [heroProfile, setHeroProfile] = useState<{ heroName: string; plateNumber: string; vehicleColor: string; vehicleModel: string; homeLatitude?: number | null; homeLongitude?: number | null } | null>(null);
   const [driverPosition, setDriverPosition] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -138,8 +136,8 @@ export default function RoutePlannerClient() {
     }
   };
 
-  const saveRoute = async (status?: string) => {
-    if (!route) return;
+  const saveRoute = async (status?: string): Promise<boolean> => {
+    if (!route) return false;
     setSaving(true);
     try {
       const res = await fetch("/api/route/save", {
@@ -158,12 +156,21 @@ export default function RoutePlannerClient() {
           }
           setTrackingTokens(tokens);
         }
+        return true;
       } else {
         setError(data.error || "Save failed");
+        return false;
       }
     } finally {
       setSaving(false);
     }
+  };
+
+  // Start Route → save as STARTED (keeps tracking links + live GPS behavior),
+  // then enter the full-screen in-app navigation mode.
+  const startAndNavigate = async () => {
+    const ok = await saveRoute("STARTED");
+    if (ok) router.push(`/route/navigate?date=${date}`);
   };
 
   // Send GPS location continuously when route is started.
@@ -176,10 +183,10 @@ export default function RoutePlannerClient() {
     // --- Native foreground service (Android APK) ---
     // When running inside the WebView APK, start the native GPS foreground service
     // so location keeps uploading even when the app is backgrounded (e.g. driver
-    // switches to Google Maps). The bridge is injected by MainActivity as AndroidGps.
-    const androidGps = (window as any).AndroidGps;
-    if (androidGps) {
-      try { androidGps.start(date); } catch {}
+    // switches to Google Maps). The bridge is injected by MainActivity as AndroidBridge.
+    const androidBridge = (window as any).AndroidBridge;
+    if (androidBridge) {
+      try { androidBridge.startGpsTracking(); } catch {}
     }
 
     if (!navigator.geolocation) {
@@ -236,8 +243,8 @@ export default function RoutePlannerClient() {
       if (interval) clearInterval(interval);
       document.removeEventListener("visibilitychange", onVis);
       // Stop the native foreground GPS service when the route is no longer active
-      const androidGps = (window as any).AndroidGps;
-      if (androidGps) { try { androidGps.stop(); } catch {} }
+      const androidBridge = (window as any).AndroidBridge;
+      if (androidBridge) { try { androidBridge.stopGpsTracking(); } catch {} }
     };
   }, [routeStatus, date]);
 
@@ -326,8 +333,8 @@ export default function RoutePlannerClient() {
                 onClick={() => {
                   if (!confirm("Stop GPS tracking? The customer's live tracking link will go offline.")) return;
                   // Stop native foreground service
-                  const androidGps = (window as any).AndroidGps;
-                  if (androidGps) { try { androidGps.stop(); } catch {} }
+                  const androidBridge = (window as any).AndroidBridge;
+                  if (androidBridge) { try { androidBridge.stopGpsTracking(); } catch {} }
                   setGpsStatus("error");
                   setRouteStatus("STOPPED");
                   // Persist STOPPED status so the tracking API knows the driver stopped
@@ -379,7 +386,7 @@ export default function RoutePlannerClient() {
             )}
             {route && routeStatus === "STARTED" && (
               <Button
-                onClick={() => setNavActive(true)}
+                onClick={() => router.push(`/route/navigate?date=${date}`)}
                 size="sm"
                 className="gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90"
               >
@@ -437,7 +444,7 @@ export default function RoutePlannerClient() {
               selectedOrderId={selectedOrderId}
               onSelectStop={onSelectStop}
               onSaveRoute={() => saveRoute()}
-              onStartRoute={() => saveRoute("STARTED")}
+              onStartRoute={startAndNavigate}
               saving={saving}
               routeStatus={routeStatus}
               trackingTokens={trackingTokens}
@@ -449,21 +456,6 @@ export default function RoutePlannerClient() {
         )}
       </div>
 
-      {/* In-app turn-by-turn navigation overlay */}
-      {navActive && route && driverPosition && (
-        <NavigationOverlay
-          stops={route.loads.flatMap((l) => l.stops).map((s) => ({
-            orderId: s.orderId,
-            customerName: s.customerName,
-            address: s.address,
-            latitude: s.latitude,
-            longitude: s.longitude,
-            phone: s.phone,
-          }))}
-          driverPosition={driverPosition}
-          onClose={() => setNavActive(false)}
-        />
-      )}
     </div>
   );
 }
