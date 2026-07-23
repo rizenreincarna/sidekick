@@ -13,6 +13,13 @@ import { Separator } from "@/components/ui/separator";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 
 // ============ TYPES ============
@@ -34,6 +41,7 @@ interface AiConversationItem {
 
 interface AiActionItem {
   id: string;
+  conversationId?: string;
   actionType: string;
   description: string;
   status: string;
@@ -447,16 +455,27 @@ function AiChatPanel({ session }: { session: { user?: { id?: string; name?: stri
   );
 }
 
+type AiProvider = "deepseek" | "agnes" | "custom";
+
+const PROVIDER_OPTIONS: { value: AiProvider; label: string; baseUrl: string; model: string; keyLabel: string }[] = [
+  { value: "deepseek", label: "DeepSeek", baseUrl: "https://api.deepseek.com", model: "deepseek-chat", keyLabel: "DeepSeek API Key" },
+  { value: "agnes", label: "Agnes AI", baseUrl: "https://apihub.agnes-ai.com", model: "agnes-2.0-flash", keyLabel: "Agnes AI API Key" },
+  { value: "custom", label: "Custom", baseUrl: "", model: "", keyLabel: "API Key" },
+];
+
 // ============ AI SETTINGS SECTION (for Settings tab) ============
 function AiSettingsSection() {
   const { toast } = useToast();
+  const [provider, setProvider] = useState<AiProvider>("deepseek");
   const [aiEnabled, setAiEnabled] = useState(false);
   const [apiKey, setApiKey] = useState("");
   const [baseUrl, setBaseUrl] = useState("https://api.deepseek.com");
   const [model, setModel] = useState("deepseek-chat");
   const [systemPrompt, setSystemPrompt] = useState("");
   const [hasKey, setHasKey] = useState(false);
+  const [hasAgnesKey, setHasAgnesKey] = useState(false);
   const [keyPreview, setKeyPreview] = useState("");
+  const [agnesKeyPreview, setAgnesKeyPreview] = useState("");
   const [saving, setSaving] = useState(false);
   const [validating, setValidating] = useState(false);
   const [aiFlags, setAiFlags] = useState<Array<{
@@ -468,14 +487,29 @@ function AiSettingsSection() {
 
   useEffect(() => {
     fetch("/api/ai/settings").then(r => r.json()).then(data => {
+      // Provider
+      if (data.ai_provider) setProvider(data.ai_provider as AiProvider);
       if (data.ai_enabled) setAiEnabled(data.ai_enabled === "true");
       if (data.ai_base_url) setBaseUrl(data.ai_base_url);
       if (data.ai_model) setModel(data.ai_model);
       if (data.ai_system_prompt) setSystemPrompt(data.ai_system_prompt);
+      // DeepSeek / custom key
       if (data.ai_has_api_key) setHasKey(data.ai_has_api_key);
       if (data.ai_api_key_preview) setKeyPreview(data.ai_api_key_preview);
+      // Agnes key
+      if (data.ai_agnes_has_key) setHasAgnesKey(data.ai_agnes_has_key);
+      if (data.ai_agnes_key_preview) setAgnesKeyPreview(data.ai_agnes_key_preview);
     }).catch(() => {});
   }, []);
+
+  // When provider changes, auto-switch baseUrl and model to defaults
+  useEffect(() => {
+    const opt = PROVIDER_OPTIONS.find(o => o.value === provider);
+    if (opt && provider !== "custom") {
+      setBaseUrl(opt.baseUrl);
+      setModel(opt.model);
+    }
+  }, [provider]);
 
   const loadFlags = () => {
     fetch("/api/ai/flags").then(r => r.json()).then(data => {
@@ -489,18 +523,28 @@ function AiSettingsSection() {
     setSaving(true);
     try {
       const body: Record<string, string> = {
+        ai_provider: provider,
         ai_enabled: aiEnabled.toString(),
         ai_base_url: baseUrl,
         ai_model: model,
         ai_system_prompt: systemPrompt,
       };
-      if (apiKey) body.ai_api_key = apiKey;
+      // Send appropriate key based on provider
+      if (apiKey) {
+        if (provider === "agnes") {
+          body.ai_agnes_api_key = apiKey;
+        } else {
+          body.ai_api_key = apiKey;
+        }
+      }
       const res = await fetch("/api/ai/settings", {
         method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) { toast({ title: data.error || "Failed to save", variant: "destructive" }); return; }
-      setApiKey(""); setHasKey(true);
+      setApiKey("");
+      if (provider === "agnes") setHasAgnesKey(true);
+      else setHasKey(true);
       toast({ title: "AI settings saved" });
     } catch { toast({ title: "Failed to save", variant: "destructive" }); }
     finally { setSaving(false); }
@@ -510,13 +554,29 @@ function AiSettingsSection() {
     if (!apiKey) return;
     setValidating(true);
     try {
+      const body: Record<string, string> = {
+        ai_provider: provider,
+        ai_base_url: baseUrl,
+        ai_model: model,
+      };
+      if (provider === "agnes") {
+        body.ai_agnes_api_key = apiKey;
+      } else {
+        body.ai_api_key = apiKey;
+      }
       const res = await fetch("/api/ai/settings", {
         method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ai_api_key: apiKey, ai_base_url: baseUrl, ai_model: model }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
-      if (res.ok) { setHasKey(true); setApiKey(""); toast({ title: "API key validated ✓" }); }
-      else toast({ title: data.error || "Invalid key", variant: "destructive" });
+      if (res.ok) {
+        if (provider === "agnes") setHasAgnesKey(true);
+        else setHasKey(true);
+        setApiKey("");
+        toast({ title: "API key validated ✓" });
+      } else {
+        toast({ title: data.error || "Invalid key", variant: "destructive" });
+      }
     } catch { toast({ title: "Validation failed", variant: "destructive" }); }
     finally { setValidating(false); }
   };
@@ -559,27 +619,50 @@ function AiSettingsSection() {
             <Switch checked={aiEnabled} onCheckedChange={setAiEnabled} />
           </div>
           <Separator className="bg-white/10" />
+
+          {/* Provider Selector */}
           <div className="space-y-2">
-            <Label className="text-sm">API Key</Label>
-            {hasKey && (
+            <Label className="text-sm">AI Provider</Label>
+            <p className="text-[10px] text-muted-foreground">Choose your AI backend</p>
+            <Select value={provider} onValueChange={(v) => setProvider(v as AiProvider)}>
+              <SelectTrigger className="border-white/10 bg-white/5 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PROVIDER_OPTIONS.map(opt => (
+                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-sm">{PROVIDER_OPTIONS.find(o => o.value === provider)?.keyLabel || "API Key"}</Label>
+            {provider === "agnes" && hasAgnesKey ? (
+              <p className="text-[10px] text-emerald-400 flex items-center gap-1">
+                <CheckCircle2 className="h-3 w-3" /> Key set: {agnesKeyPreview}
+              </p>
+            ) : provider !== "agnes" && hasKey ? (
               <p className="text-[10px] text-emerald-400 flex items-center gap-1">
                 <CheckCircle2 className="h-3 w-3" /> Key set: {keyPreview}
               </p>
-            )}
+            ) : null}
             <div className="flex gap-2">
-              <Input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder={hasKey ? "Enter new key" : "sk-..."} className="border-white/10 bg-white/5 text-sm" />
+              <Input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder={(provider === "agnes" && hasAgnesKey) || (provider !== "agnes" && hasKey) ? "Enter new key" : "sk-..."} className="border-white/10 bg-white/5 text-sm" />
               <Button variant="outline" size="sm" onClick={validateKey} disabled={!apiKey || validating} className="border-white/10 bg-white/5 shrink-0">
                 {validating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save & Validate"}
               </Button>
             </div>
           </div>
+
           <div className="space-y-2">
             <Label className="text-sm">API Base URL</Label>
-            <p className="text-[10px] text-muted-foreground">Swap provider (OpenAI, Claude, etc.)</p>
+            <p className="text-[10px] text-muted-foreground">Auto-set from provider, override if needed</p>
             <Input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://api.deepseek.com" className="border-white/10 bg-white/5 text-sm" />
           </div>
           <div className="space-y-2">
             <Label className="text-sm">Model</Label>
+            <p className="text-[10px] text-muted-foreground">Auto-set from provider, override if needed</p>
             <Input value={model} onChange={(e) => setModel(e.target.value)} placeholder="deepseek-chat" className="border-white/10 bg-white/5 text-sm" />
           </div>
           <div className="space-y-2">

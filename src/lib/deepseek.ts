@@ -4,6 +4,24 @@ import { db } from "./db";
 
 // ============ TYPES ============
 
+export type AiProvider = "deepseek" | "agnes" | "custom";
+
+export const AI_PROVIDERS: Record<AiProvider, { label: string; baseUrl: string; model: string }> = {
+  deepseek: { label: "DeepSeek", baseUrl: "https://api.deepseek.com", model: "deepseek-chat" },
+  agnes: { label: "Agnes AI", baseUrl: "https://apihub.agnes-ai.com", model: "agnes-2.0-flash" },
+  custom: { label: "Custom", baseUrl: "", model: "" },
+};
+
+export interface AiSettings {
+  provider: AiProvider;
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+  enabled: boolean;
+  systemPrompt: string;
+  agnesApiKey: string;
+}
+
 export interface ChatMessage {
   role: "user" | "assistant" | "system";
   content: string;
@@ -71,13 +89,7 @@ export interface AiActionRequest {
 
 // ============ AI SETTINGS HELPER ============
 
-export async function getAiSettings(): Promise<{
-  apiKey: string;
-  baseUrl: string;
-  model: string;
-  enabled: boolean;
-  systemPrompt: string;
-}> {
+export async function getAiSettings(): Promise<AiSettings> {
   // AI settings are stored as admin (system-wide) settings
   // We use the first admin user's settings as the system-wide config
   const adminUser = await db.user.findFirst({
@@ -86,7 +98,7 @@ export async function getAiSettings(): Promise<{
   });
 
   if (!adminUser) {
-    return { apiKey: "", baseUrl: "https://api.deepseek.com", model: "deepseek-chat", enabled: false, systemPrompt: "" };
+    return { provider: "deepseek", apiKey: "", baseUrl: "https://api.deepseek.com", model: "deepseek-chat", enabled: false, systemPrompt: "", agnesApiKey: "" };
   }
 
   const settings = await db.setting.findMany({
@@ -98,13 +110,31 @@ export async function getAiSettings(): Promise<{
     config[s.key] = s.value;
   }
 
-  return {
-    apiKey: config.ai_api_key || "",
-    baseUrl: config.ai_base_url || "https://api.deepseek.com",
-    model: config.ai_model || "deepseek-chat",
-    enabled: config.ai_enabled === "true",
-    systemPrompt: config.ai_system_prompt || "",
-  };
+  const provider = (config.ai_provider || "deepseek") as AiProvider;
+  const agnesApiKey = config.ai_agnes_api_key || process.env.AGNES_API_KEY || "";
+  const enabled = config.ai_enabled === "true";
+  const systemPrompt = config.ai_system_prompt || "";
+
+  let apiKey: string;
+  let baseUrl: string;
+  let model: string;
+
+  if (provider === "agnes") {
+    apiKey = agnesApiKey;
+    baseUrl = config.ai_base_url || "https://apihub.agnes-ai.com";
+    model = config.ai_model || "agnes-2.0-flash";
+  } else if (provider === "custom") {
+    apiKey = config.ai_api_key || "";
+    baseUrl = config.ai_base_url || "";
+    model = config.ai_model || "";
+  } else {
+    // deepseek (default)
+    apiKey = config.ai_api_key || "";
+    baseUrl = config.ai_base_url || "https://api.deepseek.com";
+    model = config.ai_model || "deepseek-chat";
+  }
+
+  return { provider, apiKey, baseUrl, model, enabled, systemPrompt, agnesApiKey };
 }
 
 export async function isAiEnabled(): Promise<boolean> {
@@ -117,6 +147,7 @@ export async function getAiStatus(): Promise<{
   hasApiKey: boolean;
   model: string;
   baseUrl: string;
+  provider: AiProvider;
 }> {
   const settings = await getAiSettings();
   return {
@@ -124,6 +155,7 @@ export async function getAiStatus(): Promise<{
     hasApiKey: settings.apiKey.length > 0,
     model: settings.model,
     baseUrl: settings.baseUrl,
+    provider: settings.provider,
   };
 }
 

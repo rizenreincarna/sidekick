@@ -2,7 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { db } from "@/lib/db";
 import { requireAuth } from "@/lib/session";
+import { logAudit } from "@/lib/audit";
 import type { OptimizedRouteResult, VroomStopDetail } from "@/lib/vroom";
+
+// Tracking links expire at end of the route day (Asia/Kuala_Lumpur) + 24h grace.
+function trackingLinkExpiry(routeDate: string): Date {
+  return new Date(new Date(`${routeDate}T23:59:59+08:00`).getTime() + 24 * 60 * 60 * 1000);
+}
 
 // POST /api/route/save — Persists an optimized route to the DB.
 // Body: { date, routeData, status? }
@@ -30,6 +36,24 @@ export async function POST(request: NextRequest) {
     const isPrivileged = user.role === "ADMIN" || user.role === "SUPPORT";
     const targetUserId =
       isPrivileged && body.userId ? String(body.userId) : user.id;
+
+    // Cross-user access: validate the target user exists and leave an audit trail
+    if (targetUserId !== user.id) {
+      const target = await db.user.findUnique({
+        where: { id: targetUserId },
+        select: { id: true },
+      });
+      if (!target) {
+        return NextResponse.json({ error: "Target user not found." }, { status: 404 });
+      }
+      await logAudit({
+        userId: user.id,
+        action: "ROUTE_SAVE_CROSS_USER",
+        entity: "Route",
+        entityId: `${targetUserId}:${date}`,
+        details: `${user.role} ${user.username} saved route for user ${targetUserId} (${routeData.totalStops || 0} stops)`,
+      });
+    }
 
     const totalDistance = routeData.totalDistanceMeters || 0;
     const totalDuration = routeData.totalDurationSeconds || 0;
@@ -72,6 +96,7 @@ export async function POST(request: NextRequest) {
           where: { orderId: stop.orderId, routeDate: date, userId: targetUserId },
         });
         const token = existing?.token || randomUUID();
+        const expiresAt = trackingLinkExpiry(date);
         if (existing) {
           await db.trackingLink.update({
             where: { id: existing.id },
@@ -82,6 +107,7 @@ export async function POST(request: NextRequest) {
               longitude: stop.longitude,
               stopNumber: stopNum,
               plannedEta: stop.arrival ? new Date(stop.arrival * 1000).toISOString() : null,
+              expiresAt,
             },
           });
         } else {
@@ -97,6 +123,7 @@ export async function POST(request: NextRequest) {
               longitude: stop.longitude,
               stopNumber: stopNum,
               plannedEta: stop.arrival ? new Date(stop.arrival * 1000).toISOString() : null,
+              expiresAt,
             },
           });
         }

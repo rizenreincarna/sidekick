@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
     const headerRow = sheet.addRow(headers);
     headerRow.eachCell((cell) => {
       cell.font = { name: "Book Antiqua", size: 12, bold: true, color: { theme: 0 } };
-      cell.fill = { type: "pattern", pattern: "solid", fgColor: { theme: 4, tint: -0.25 } };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { theme: 4 } };
       cell.alignment = { vertical: "middle" };
     });
 

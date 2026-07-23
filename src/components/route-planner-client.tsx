@@ -4,11 +4,10 @@ import { useCallback, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
-import { Loader2, MapPin, Sparkles, ArrowLeft, Route as RouteIcon, Navigation } from "lucide-react";
+import { Loader2, MapPin, Sparkles, ArrowLeft, Route as RouteIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import RouteSummaryPanel from "@/components/route-summary-panel";
-import { NavigationOverlay } from "@/components/navigation-overlay";
 import type { OptimizedRouteResult, VroomStopDetail } from "@/lib/vroom";
 
 // Three.js uses window/document — MUST be imported with ssr: false.
@@ -32,7 +31,6 @@ export default function RoutePlannerClient() {
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [routeStatus, setRouteStatus] = useState<string>("OPTIMIZED");
   const [panelOpen, setPanelOpen] = useState(true);
-  const [navActive, setNavActive] = useState(false);
   const [trackingTokens, setTrackingTokens] = useState<Record<string, { token: string; completed: boolean }>>({});
   const [heroProfile, setHeroProfile] = useState<{ heroName: string; plateNumber: string; vehicleColor: string; vehicleModel: string; homeLatitude?: number | null; homeLongitude?: number | null } | null>(null);
   const [driverPosition, setDriverPosition] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -176,10 +174,10 @@ export default function RoutePlannerClient() {
     // --- Native foreground service (Android APK) ---
     // When running inside the WebView APK, start the native GPS foreground service
     // so location keeps uploading even when the app is backgrounded (e.g. driver
-    // switches to Google Maps). The bridge is injected by MainActivity as AndroidGps.
-    const androidGps = (window as any).AndroidGps;
-    if (androidGps) {
-      try { androidGps.start(date); } catch {}
+    // switches to Google Maps). The bridge is injected by MainActivity as AndroidBridge.
+    const androidBridge = (window as any).AndroidBridge;
+    if (androidBridge) {
+      try { androidBridge.startGpsTracking(); } catch {}
     }
 
     if (!navigator.geolocation) {
@@ -236,8 +234,8 @@ export default function RoutePlannerClient() {
       if (interval) clearInterval(interval);
       document.removeEventListener("visibilitychange", onVis);
       // Stop the native foreground GPS service when the route is no longer active
-      const androidGps = (window as any).AndroidGps;
-      if (androidGps) { try { androidGps.stop(); } catch {} }
+      const androidBridge = (window as any).AndroidBridge;
+      if (androidBridge) { try { androidBridge.stopGpsTracking(); } catch {} }
     };
   }, [routeStatus, date]);
 
@@ -326,14 +324,18 @@ export default function RoutePlannerClient() {
                 onClick={() => {
                   if (!confirm("Stop GPS tracking? The customer's live tracking link will go offline.")) return;
                   // Stop native foreground service
-                  const androidGps = (window as any).AndroidGps;
-                  if (androidGps) { try { androidGps.stop(); } catch {} }
+                  const androidBridge = (window as any).AndroidBridge;
+                  if (androidBridge) { try { androidBridge.stopGpsTracking(); } catch {} }
                   setGpsStatus("error");
                   setRouteStatus("STOPPED");
                   // Persist STOPPED status so the tracking API knows the driver stopped
                   saveRoute("STOPPED");
                   // Clear driver position on the server so the tracking link shows the exception
-                  fetch("/api/driver/location", { method: "DELETE" }).catch(() => {});
+                  fetch("/api/driver/location", {
+                    method: "DELETE",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ confirm: true }),
+                  }).catch(() => {});
                 }}
                 title="Emergency: stop GPS tracking immediately"
                 className="flex items-center gap-1.5 px-2 py-1 rounded-full text-[0.625rem] font-bold transition-transform active:scale-90"
@@ -375,16 +377,6 @@ export default function RoutePlannerClient() {
                 className="gap-1.5 border-white/10 bg-white/5 hover:bg-white/10 lg:hidden"
               >
                 {panelOpen ? "Map" : "Stops"}
-              </Button>
-            )}
-            {route && routeStatus === "STARTED" && (
-              <Button
-                onClick={() => setNavActive(true)}
-                size="sm"
-                className="gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90"
-              >
-                <Navigation className="h-4 w-4" />
-                Navigate
               </Button>
             )}
           </div>
@@ -449,21 +441,6 @@ export default function RoutePlannerClient() {
         )}
       </div>
 
-      {/* In-app turn-by-turn navigation overlay */}
-      {navActive && route && driverPosition && (
-        <NavigationOverlay
-          stops={route.loads.flatMap((l) => l.stops).map((s) => ({
-            orderId: s.orderId,
-            customerName: s.customerName,
-            address: s.address,
-            latitude: s.latitude,
-            longitude: s.longitude,
-            phone: s.phone,
-          }))}
-          driverPosition={driverPosition}
-          onClose={() => setNavActive(false)}
-        />
-      )}
     </div>
   );
 }

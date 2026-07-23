@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAuth } from "@/lib/session";
+import { logAudit } from "@/lib/audit";
 import { optimizeRouteForDate, type VroomOrderInput } from "@/lib/vroom";
 import { FIXED_LOCATIONS } from "@/lib/route-model";
 
@@ -24,6 +25,24 @@ export async function POST(request: NextRequest) {
     // Support/Admin may pass userId to optimize another hero's route
     const isPrivileged = user.role === "ADMIN" || user.role === "SUPPORT";
     const targetUserId = isPrivileged && body.userId ? String(body.userId) : user.id;
+
+    // Cross-user access: validate the target user exists and leave an audit trail
+    if (targetUserId !== user.id) {
+      const target = await db.user.findUnique({
+        where: { id: targetUserId },
+        select: { id: true },
+      });
+      if (!target) {
+        return NextResponse.json({ error: "Target user not found." }, { status: 404 });
+      }
+      await logAudit({
+        userId: user.id,
+        action: "ROUTE_OPTIMIZE_CROSS_USER",
+        entity: "Route",
+        entityId: `${targetUserId}:${date}`,
+        details: `${user.role} ${user.username} optimized route for user ${targetUserId}`,
+      });
+    }
 
     const orders = await db.order.findMany({
       where: {

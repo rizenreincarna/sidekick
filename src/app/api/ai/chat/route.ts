@@ -236,7 +236,7 @@ export async function POST(request: NextRequest) {
     const tomorrowPoints = tomorrowOrders.reduce((sum, o) => sum + (o.points || 0), 0);
 
     // Group this week's orders by date for schedule view
-    const weekByDate: Record<string, Array<{ orderId: string; customerName: string; city: string; zone: number; size: string; points: number; status: string; isEvent: boolean; isErthbox: boolean; notes: string | null }>> = {};
+    const weekByDate: Record<string, Array<{ orderId: string; customerName: string; city: string; zone: number; size: string; points: number; status: string; isEvent: boolean; eventType: string | null; isErthbox: boolean; notes: string | null }>> = {};
     for (const o of thisWeekOrders) {
       const date = o.scheduledDate!;
       if (!date) continue;
@@ -244,7 +244,7 @@ export async function POST(request: NextRequest) {
       weekByDate[date].push({
         orderId: o.orderId, customerName: o.customerName, city: o.city,
         zone: o.zone, size: o.size, points: o.points || 0, status: o.status,
-        isEvent: o.isEvent, isErthbox: o.isErthbox, notes: o.notes,
+        isEvent: o.isEvent, eventType: o.eventType, isErthbox: o.isErthbox, notes: o.notes,
       });
     }
 
@@ -446,7 +446,7 @@ You can help with:
 
     // Parse and create actions if any
     const actions = parseAiActions(result.content);
-    const createdActions = [];
+    const createdActions: { id: string; actionType: string; description: string; status: string }[] = [];
     for (const action of actions) {
       const dbAction = await db.aiAction.create({
         data: {

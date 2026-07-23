@@ -1,5 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { rateLimit } from "@/lib/rate-limit";
+
+// Public tracking endpoint: customers poll every 5s (~12 req/min).
+// 40/min per IP leaves headroom for multiple tabs/devices behind NAT
+// while blocking hammering.
+const TRACK_RATE_LIMIT = 40;
+const TRACK_RATE_WINDOW_MS = 60_000;
+const TRACK_CACHE_HEADERS = { "Cache-Control": "public, max-age=5" } as const;
 
 // Haversine distance in meters
 function haversine(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -38,7 +46,7 @@ async function getRouteInfo(userId: string, routeDate: string): Promise<{ stops:
   try {
     routeData = JSON.parse(route.routeData);
   } catch {
-    return null;
+    return { stops: null, status: route.status };
   }
   if (!routeData?.loads) return { stops: null, status: route.status };
 
@@ -71,14 +79,47 @@ async function getRouteInfo(userId: string, routeDate: string): Promise<{ stops:
   return { stops, status: route.status };
 }
 
+// OSRM result cache (15s TTL) + in-flight dedupe. The tracking page polls
+// every 5s, so without this each viewer triggers an OSRM call per poll — and
+// concurrent stacked polls duplicate identical calls. Driver GPS moves slowly
+// relative to the cache TTL, so ETAs stay accurate.
+const OSRM_CACHE_TTL_MS = 15_000;
+const OSRM_TIMEOUT_MS = 3_500; // must stay well under the 5s client poll interval
+const osrmCache = new Map<string, { duration: number; distance: number; ts: number }>();
+const osrmInflight = new Map<string, Promise<{ duration: number; distance: number } | null>>();
+
 // Query OSRM for the travel time (seconds) and distance (meters) along a sequence of coordinates
 async function osrmRoute(coords: [number, number][]): Promise<{ duration: number; distance: number } | null> {
   if (coords.length < 2) return { duration: 0, distance: 0 };
+
+  // Round to ~11m so near-identical positions share a cache entry
+  const key = coords.map(([lat, lon]) => `${lat.toFixed(4)},${lon.toFixed(4)}`).join(";");
+  const cached = osrmCache.get(key);
+  if (cached && Date.now() - cached.ts < OSRM_CACHE_TTL_MS) {
+    return { duration: cached.duration, distance: cached.distance };
+  }
+  const inflight = osrmInflight.get(key);
+  if (inflight) return inflight;
+
+  const promise = osrmRouteUncached(coords)
+    .then((result) => {
+      if (result) {
+        if (osrmCache.size > 1_000) osrmCache.clear();
+        osrmCache.set(key, { ...result, ts: Date.now() });
+      }
+      return result;
+    })
+    .finally(() => osrmInflight.delete(key));
+  osrmInflight.set(key, promise);
+  return promise;
+}
+
+async function osrmRouteUncached(coords: [number, number][]): Promise<{ duration: number; distance: number } | null> {
   try {
     // OSRM expects lon,lat;lon,lat
     const coordStr = coords.map(([lat, lon]) => `${lon},${lat}`).join(";");
     const url = `http://localhost:5000/route/v1/driving/${coordStr}?overview=full&geometries=geojson`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    const res = await fetch(url, { signal: AbortSignal.timeout(OSRM_TIMEOUT_MS) });
     if (!res.ok) return null;
     const data = await res.json();
     if (!data.routes || data.routes.length === 0) return null;
@@ -100,9 +141,21 @@ function haversineEta(from: [number, number], to: [number, number]): { duration:
 
 // GET /api/track/[token] — public tracking endpoint (no auth)
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ token: string }> }
 ) {
+  const ip =
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    req.headers.get("x-real-ip") ||
+    "unknown";
+  const rl = rateLimit(`track:${ip}`, TRACK_RATE_LIMIT, TRACK_RATE_WINDOW_MS);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: "Too many requests — please slow down" },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfterSec) } }
+    );
+  }
+
   const { token } = await params;
 
   const link = await db.trackingLink.findUnique({
@@ -112,6 +165,14 @@ export async function GET(
 
   if (!link) {
     return NextResponse.json({ error: "Tracking link not found" }, { status: 404 });
+  }
+
+  // Expired links stop serving any data (older links without expiresAt are grandfathered)
+  if (link.expiresAt && link.expiresAt.getTime() < Date.now()) {
+    return NextResponse.json(
+      { error: "This tracking link has expired" },
+      { status: 410 }
+    );
   }
 
   const heroProfile = link.user.heroProfile;
@@ -128,18 +189,22 @@ export async function GET(
   });
   const customerAddress = order ? `${order.address}${order.city ? ", " + order.city : ""}` : null;
 
-  // If pickup completed, return completion message
+  // If pickup completed, return completion message.
+  // PII is minimized post-completion: the customer's home address is no longer
+  // needed and is withheld (driver/vehicle info stays — the completed UI shows it).
   if (link.completedAt) {
-    return NextResponse.json({
-      status: "completed",
-      completedAt: link.completedAt.toISOString(),
-      customerName: link.customerName,
-      customerAddress,
-      heroName,
-      vehicleModel,
-      plateNumber,
-      vehicleColor,
-    });
+    return NextResponse.json(
+      {
+        status: "completed",
+        completedAt: link.completedAt.toISOString(),
+        customerName: link.customerName,
+        heroName,
+        vehicleModel,
+        plateNumber,
+        vehicleColor,
+      },
+      { headers: TRACK_CACHE_HEADERS }
+    );
   }
 
   // Get driver's latest position
@@ -156,13 +221,10 @@ export async function GET(
   // Determine which stops come before this customer's stop (and are not yet completed)
   const myStopNumber = link.stopNumber;
   const stopsBeforeMe: RouteStop[] = [];
-  let myStop: RouteStop | undefined;
   if (routeStops) {
     for (const s of routeStops) {
       if (s.stopNumber < myStopNumber) {
         stopsBeforeMe.push(s);
-      } else if (s.stopNumber === myStopNumber) {
-        myStop = s;
       }
     }
   }
@@ -172,7 +234,11 @@ export async function GET(
   let eta: { minutes: number; distanceKm: number; stopsBefore: number } | null = null;
   let driverPosition: { latitude: number; longitude: number; updatedAt: string } | null = null;
 
-  if (driverLoc) {
+  // Only expose the driver's live position when the route is actively STARTED.
+  // When the route is OPTIMIZED (not yet started) or STOPPED, stale GPS from a
+  // previous run must NOT be shown — otherwise customers see "Live" before the
+  // driver has actually begun the route.
+  if (driverLoc && routeStatus === "STARTED") {
     driverPosition = {
       latitude: driverLoc.latitude,
       longitude: driverLoc.longitude,
@@ -260,7 +326,8 @@ export async function GET(
     minute: "2-digit",
   });
 
-  return NextResponse.json({
+  return NextResponse.json(
+    {
     status: "active",
     customerName: link.customerName,
     customerAddress,
@@ -281,5 +348,7 @@ export async function GET(
     // the driver cleared their GPS position. The customer sees an exception banner.
     driverStopped: routeStatus === "STOPPED",
     routeStatus,
-  });
+    },
+    { headers: TRACK_CACHE_HEADERS }
+  );
 }

@@ -11,6 +11,13 @@ import { requireAuth } from "@/lib/session";
 // both the phone app and the web browser, the phone's GPS always wins.
 const MOBILE_PRIORITY_MS = 2 * 60 * 1000; // 2 minutes
 
+// Server-side throttle: minimum interval between accepted GPS writes per user.
+// The Android app posts at most every 5s (MIN_TIME_MS=5000), so a 2s floor
+// never drops legitimate updates but stops 1-req/sec abuse from buggy or
+// hostile clients. Skipped updates return 200 so clients don't treat it as an
+// error (the Android service ignores the body; the web client treats !ok as failure).
+const MIN_UPDATE_INTERVAL_MS = 2_000;
+
 function detectSource(req: NextRequest): "mobile" | "web" {
   const ua = req.headers.get("user-agent") || "";
   return ua.includes("SidekickDev") ? "mobile" : "web";
@@ -51,6 +58,19 @@ export async function POST(req: NextRequest) {
           ok: true,
           skipped: true,
           reason: "mobile_priority",
+          updatedAt: existing.updatedAt,
+        });
+      }
+    }
+
+    // Throttle: skip writes that arrive faster than MIN_UPDATE_INTERVAL_MS.
+    if (existing) {
+      const ageMs = Date.now() - existing.updatedAt.getTime();
+      if (ageMs < MIN_UPDATE_INTERVAL_MS) {
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "throttled",
           updatedAt: existing.updatedAt,
         });
       }
@@ -106,12 +126,26 @@ export async function GET() {
 }
 
 // DELETE /api/driver/location — driver stops tracking (emergency stop)
-// Clears the driver position so the tracking link shows "driver stopped broadcasting"
-export async function DELETE() {
+// Clears the driver position so the tracking link shows "driver stopped broadcasting".
+// Requires body { "confirm": true } so an accidental bare DELETE can't wipe GPS state.
+export async function DELETE(req: NextRequest) {
   try {
     const user = await requireAuth();
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    let confirmed = false;
+    try {
+      const body = await req.json();
+      confirmed = body?.confirm === true;
+    } catch {
+      confirmed = false; // empty/invalid body → not confirmed
+    }
+    if (!confirmed) {
+      return NextResponse.json(
+        { error: "Send { \"confirm\": true } to clear GPS tracking data." },
+        { status: 400 }
+      );
     }
     await db.driverLocation.deleteMany({ where: { userId: user.id } });
     return NextResponse.json({ ok: true });

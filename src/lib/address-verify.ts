@@ -226,7 +226,7 @@ async function analyzeWithAi(
   city: string,
   geoOk: boolean,
   geoNote: string,
-  customerName?: string,
+  customerName: string | undefined,
   geoTypes: string[],
   isCommercialFromGoogle: boolean,
   isResidentialFromGoogle: boolean

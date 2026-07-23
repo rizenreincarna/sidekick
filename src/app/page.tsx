@@ -186,6 +186,55 @@ function getWhatsAppLink(order: Order, template?: string, phonePrefix?: string):
 // ============ CHANGELOG ============
 const CHANGELOG = [
   {
+    version: "v1.26",
+    date: "Jul 2026",
+    title: "Android: Pull-to-Refresh Fix & Settings Changelog",
+    highlights: [
+      "Android: Pull-to-refresh disabled on route optimizer / map pages — dragging the map no longer reloads",
+      "Android: Added AndroidBridge.openSettings() and setPullToRefresh() JS bridges",
+      "Android: App version now dynamic in Settings (reads BuildConfig.VERSION_NAME)",
+      "Android: Settings page now has What's New changelog section at the bottom",
+      "Android: User-agent strings auto-update with version number",
+    ],
+    changes: [],
+  },
+  {
+    version: "v1.25",
+    date: "Jul 2026",
+    title: "Android: GPS Crash Fixed",
+    highlights: [
+      "CRITICAL: Fixed crash loop where enabling GPS then relaunching would crash immediately",
+      "Root cause: startForegroundService called without location permission check — Android 14 throws SecurityException",
+      "Added safeStartGpsTracking() with permission check + try/catch at all 4 call sites",
+      "Fixed onResume auto-restart crash — GPS pref now resets to false when permission missing",
+    ],
+    changes: [],
+  },
+  {
+    version: "v1.24",
+    date: "Jul 2026",
+    title: "Android: Source Audit & Rebuild",
+    highlights: [
+      "Full source audit: all layouts, drawables, colors, IDs, permissions verified present",
+      "Application ID: space.rizen.sidekick, minSdk 24, targetSdk 34",
+      "ProGuard/R8: -keep class space.rizen.sidekick.**",
+    ],
+    changes: [],
+  },
+  {
+    version: "v1.23",
+    date: "Jul 2026",
+    title: "Android: Initial Sidekick Release",
+    highlights: [
+      "WebView-based app loading sidekick.rizen.space",
+      "GPS tracking via foreground service (FusedLocationProviderClient)",
+      "JavaScript bridge: startGpsTracking, stopGpsTracking, isGpsTracking, getAppVersion, showToast",
+      "Settings: server URL, GPS toggle + interval, push notifications",
+      "Deep link support for /track/[token] URLs",
+    ],
+    changes: [],
+  },
+  {
     version: "v1.21",
     date: "Jul 2026",
     title: "Size System Overhaul & Points Increase",
@@ -209,7 +258,7 @@ const CHANGELOG = [
       "Backend points validation: all API routes updated to allow up to 20 points",
       "UI labels and help text updated across the app to reflect new size scale",
       "Scheduler: added skip for today (i=0) and tomorrow (i=1), first working day is +2",
-      "Order sorting feature (v1.20): Sort by creation date, order ID, or last update",
+"Order sorting feature (v1.20): Sort by creation date, order ID, or last update",
       "Restored missing batch status/date API endpoints for bulk order operations",
     ],
   },
@@ -5626,14 +5675,14 @@ function SettingsTab({ holidays, onRefresh, session, onReplayOnboarding, onVerif
         <button onClick={() => toggleSection("changelog")} className="w-full flex items-center justify-between p-4 text-left hover:bg-white/5 transition-colors">
           <h3 className="font-semibold flex items-center gap-2"><History className="h-5 w-5 text-primary" />Changelog</h3>
           <div className="flex items-center gap-2">
-            <Badge variant="outline" className="text-[0.625rem] border-primary/30 text-primary px-2 py-0">v1.20</Badge>
+            <Badge variant="outline" className="text-[0.625rem] border-primary/30 text-primary px-2 py-0">v1.26</Badge>
             <ChevronRight className={`h-4 w-4 text-muted-foreground transition-transform ${openSections.has("changelog") ? "rotate-90" : ""}`} />
           </div>
         </button>
         {openSections.has("changelog") && (
           <div className="px-4 pb-4 border-t border-white/5">
             <div className="pt-3 mb-4">
-              <p className="text-xs text-muted-foreground">Track what's new in HERO Sidekick. Current version: <span className="text-primary font-semibold">v1.21</span></p>
+              <p className="text-xs text-muted-foreground">Track what's new in HERO Sidekick. Current version: <span className="text-primary font-semibold">v1.26</span></p>
             </div>
             <div className="space-y-4">
               {CHANGELOG.map((entry, idx) => (

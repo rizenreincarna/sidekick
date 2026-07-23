@@ -105,7 +105,7 @@ fun StatsTab(
                 NeonLoadingCard(Modifier.fillMaxWidth())
             } else if (server.error != null) {
                 NeonErrorCard(
-                    message = server.error!!,
+                    message = server.error ?: "Error",
                     modifier = Modifier.fillMaxWidth()
                 )
             }

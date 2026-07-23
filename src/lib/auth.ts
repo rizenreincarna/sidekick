@@ -67,6 +67,11 @@ export const authOptions: NextAuthOptions = {
   ],
   session: {
     strategy: "jwt",
+    // 14-day rolling sessions (NextAuth default is 30 days). Active users are
+    // refreshed on activity and never logged out; 14 days of inactivity ends the
+    // session. Bounds the exposure window of a stolen token.
+    maxAge: 14 * 24 * 60 * 60,
+    updateAge: 24 * 60 * 60,
   },
   events: {
     async signIn({ user }) {

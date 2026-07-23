@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAuth } from "@/lib/session";
+import { logAudit } from "@/lib/audit";
 import type { OptimizedRouteResult } from "@/lib/vroom";
 
 // GET /api/route/preview?date=YYYY-MM-DD — Returns the saved route for a date.
@@ -21,6 +22,24 @@ export async function GET(request: NextRequest) {
     const isPrivileged = user.role === "ADMIN" || user.role === "SUPPORT";
     const userIdParam = searchParams.get("userId");
     const targetUserId = isPrivileged && userIdParam ? userIdParam : user.id;
+
+    // Cross-user access: validate the target user exists and leave an audit trail
+    if (targetUserId !== user.id) {
+      const target = await db.user.findUnique({
+        where: { id: targetUserId },
+        select: { id: true },
+      });
+      if (!target) {
+        return NextResponse.json({ error: "Target user not found." }, { status: 404 });
+      }
+      await logAudit({
+        userId: user.id,
+        action: "ROUTE_PREVIEW_CROSS_USER",
+        entity: "Route",
+        entityId: `${targetUserId}:${date}`,
+        details: `${user.role} ${user.username} previewed route for user ${targetUserId}`,
+      });
+    }
 
     const route = await db.route.findUnique({
       where: { userId_date: { userId: targetUserId, date } },

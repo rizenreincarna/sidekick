@@ -116,13 +116,13 @@ fun DeliveryTab(
 
                 orders.error != null && !hasStats -> {
                     NeonErrorCard(
-                        message = orders.error!!,
+                        message = orders.error ?: "Error",
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
 
                 hasStats -> {
-                    val o = orders.stats!!
+                    val o = orders.stats ?: return@AnimatedContent
 
                     Column(
                         verticalArrangement = Arrangement.spacedBy(Spacing.sm)

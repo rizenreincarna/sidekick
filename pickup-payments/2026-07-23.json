@@ -1,0 +1,26 @@
+[
+  {
+    "type": "payment",
+    "amount": 22,
+    "note": "26112 Kuala Lumpur",
+    "seq": 1
+  },
+  {
+    "type": "received",
+    "amount": 35,
+    "note": "26112 - pickup fee",
+    "seq": 2
+  },
+  {
+    "type": "payment",
+    "amount": 76,
+    "note": "26056 - Kuala Lumpur (XL 5pts)",
+    "seq": 3
+  },
+  {
+    "type": "payment",
+    "amount": 25,
+    "note": "26069 Seri Kembangan",
+    "seq": 4
+  }
+]
