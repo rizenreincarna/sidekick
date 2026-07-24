@@ -43,22 +43,38 @@ model User {
 }
 
 model Route {
-  id            String   @id @default(cuid())
-  date          String
-  userId        String
-  vehicleId     Int
-  routeData     String
-  idMapping     String
-  totalDistance Float
-  totalDuration Int
-  stopCount     Int
-  status        String   @default("OPTIMIZED")
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                String             @id @default(cuid())
+  date              String
+  userId            String
+  vehicleId         Int
+  routeData         String
+  idMapping         String
+  totalDistance     Float
+  totalDuration     Int
+  stopCount         Int
+  status            String             @default("OPTIMIZED")
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  routeAlternatives RouteAlternative[]
 
   @@unique([userId, date])
   @@index([userId, date])
+}
+
+model RouteAlternative {
+  id              String   @id @default(cuid())
+  routeId         String
+  dropOff         String // DROP_A | DROP_B per load
+  loadIndex       Int
+  distanceMeters  Float
+  durationSeconds Int
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  route           Route    @relation(fields: [routeId], references: [id], onDelete: Cascade)
+
+  @@unique([routeId, loadIndex])
+  @@index([routeId])
 }
 
 model DeviceToken {

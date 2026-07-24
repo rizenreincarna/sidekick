@@ -186,6 +186,21 @@ function getWhatsAppLink(order: Order, template?: string, phonePrefix?: string):
 // ============ CHANGELOG ============
 const CHANGELOG = [
   {
+    version: "v1.27",
+    date: "24 Jul 2026",
+    title: "Smart Drop-Point Selection & Route Editor",
+    highlights: [
+      "Route optimizer now picks the shortest drop-off point per load — compares DROP_A (Cyberjaya) vs DROP_B (PJ) from your last pickup and chooses the shorter route",
+      "Distance target indicator: total distance shown in green (≤100 km) or amber (>100 km) with alternative-drop comparison",
+      "Tap 'switch to …' on any load to toggle its drop point and see the difference live",
+      "Drag-and-drop reorder: grab the ⋮⋮ grip handle to rearrange pickup stops — ETAs and distances recalculate instantly",
+      "Reverse route button (⇅) on each load flips the stop order so you can test whether the opposite direction is shorter",
+    ],
+    changes: [
+      "Saved routes from before this update are auto-upgraded — no data loss",
+    ],
+  },
+  {
     version: "v1.26",
     date: "Jul 2026",
     title: "Android: Pull-to-Refresh Fix & Settings Changelog",
@@ -5675,14 +5690,14 @@ function SettingsTab({ holidays, onRefresh, session, onReplayOnboarding, onVerif
         <button onClick={() => toggleSection("changelog")} className="w-full flex items-center justify-between p-4 text-left hover:bg-white/5 transition-colors">
           <h3 className="font-semibold flex items-center gap-2"><History className="h-5 w-5 text-primary" />Changelog</h3>
           <div className="flex items-center gap-2">
-            <Badge variant="outline" className="text-[0.625rem] border-primary/30 text-primary px-2 py-0">v1.26</Badge>
+            <Badge variant="outline" className="text-[0.625rem] border-primary/30 text-primary px-2 py-0">v1.27</Badge>
             <ChevronRight className={`h-4 w-4 text-muted-foreground transition-transform ${openSections.has("changelog") ? "rotate-90" : ""}`} />
           </div>
         </button>
         {openSections.has("changelog") && (
           <div className="px-4 pb-4 border-t border-white/5">
             <div className="pt-3 mb-4">
-              <p className="text-xs text-muted-foreground">Track what's new in HERO Sidekick. Current version: <span className="text-primary font-semibold">v1.26</span></p>
+              <p className="text-xs text-muted-foreground">Track what's new in HERO Sidekick. Current version: <span className="text-primary font-semibold">v1.27</span></p>
             </div>
             <div className="space-y-4">
               {CHANGELOG.map((entry, idx) => (

@@ -1,0 +1,39 @@
+{
+  "runId": "de3367ba",
+  "agent": "reviewer",
+  "task": "[Read from: /root/my-app/plan.md, /root/my-app/progress.md]\n\nPerform a rigorous correctness audit of this React/TypeScript turn-by-turn navigation engine (Next.js client hooks). Read these files in full:\n\n- /root/sidekick-dev/src/hooks/use-navigation-engine.ts\n- /root/sidekick-dev/src/hooks/use-driver-location.ts\n- /root/sidekick-dev/src/hooks/use-speech-navigation.ts\n- /root/sidekick-dev/src/hooks/use-wake-lock.ts\n- /root/sidekick-dev/src/lib/geo-utils.ts\n- /root/sidekick-dev/src/lib/navigation.ts\n- /root/sidekick-dev/src/lib/osrm.ts\n\nHunt specifically for:\n1. State machine bugs: transitions that can get stuck (e.g. status 'ready' never reached, completed never firing, arrived → next leg race).\n2. React hook issues: stale closures, missing/incorrect effect deps causing loops or missed updates, state updates after unmount, ref/state divergence.\n3. Race conditions: concurrent leg requests (AbortController sequencing), reroute while completing, position updates during target switch.\n4. Geometry math errors: cumulative distance indexing, projection edge cases (empty/1-point paths, antimeridian not relevant), step-index boundary conditions, bearing calculation.\n5. Memory leaks: intervals/rAF/watchers not cleaned up, AbortController leaks.\n6. Off-by-one errors in stepStartDistances vs steps arrays, target indexing, resume index handling.\n7. Voice cue logic: can announcements double-fire or fire for stale steps?\n\nFor each finding: file:line, severity (critical/high/medium/low), concise explanation, and a concrete fix suggestion. Be skeptical and verify claims against the actual code. Do NOT edit files — report only. Return a numbered list ordered by severity.",
+  "exitCode": 1,
+  "usage": {
+    "input": 15839,
+    "output": 955,
+    "cacheRead": 47616,
+    "cacheWrite": 0,
+    "cost": 0.07612680000000001,
+    "turns": 9
+  },
+  "model": "opencode-go/kimi-k3:high",
+  "attemptedModels": [
+    "opencode-go/kimi-k3:high"
+  ],
+  "modelAttempts": [
+    {
+      "model": "opencode-go/kimi-k3:high",
+      "success": false,
+      "exitCode": 1,
+      "error": "401: {\"type\":\"CreditsError\",\"message\":\"Insufficient balance. Manage your billing here: https://opencode.ai/workspace/wrk_01KV5BJ7S53KTWSGRSFHFKPGEN/billing\"}",
+      "usage": {
+        "input": 15839,
+        "output": 955,
+        "cacheRead": 47616,
+        "cacheWrite": 0,
+        "cost": 0.07612680000000001,
+        "turns": 9
+      }
+    }
+  ],
+  "durationMs": 295831,
+  "toolCount": 12,
+  "error": "401: {\"type\":\"CreditsError\",\"message\":\"Insufficient balance. Manage your billing here: https://opencode.ai/workspace/wrk_01KV5BJ7S53KTWSGRSFHFKPGEN/billing\"}",
+  "transcriptPath": "/root/my-app/.pi-subagents/artifacts/de3367ba_reviewer_0_transcript.jsonl",
+  "timestamp": 1784834707452
+}

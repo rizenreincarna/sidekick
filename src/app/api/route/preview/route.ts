@@ -2,7 +2,35 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAuth } from "@/lib/session";
 import { logAudit } from "@/lib/audit";
-import type { OptimizedRouteResult } from "@/lib/vroom";
+import type { OptimizedRouteResult, VroomLoadPlan, DropAlternative } from "@/lib/vroom";
+
+/** Ensure old saved route data has the new fields added on 2026-07-24. */
+function normalizeRouteData(raw: any): OptimizedRouteResult {
+  const route = raw as OptimizedRouteResult;
+
+  if (typeof route.totalAlternativeDistanceMeters !== "number") {
+    route.totalAlternativeDistanceMeters = 0;
+  }
+  if (typeof route.totalAlternativeDurationSeconds !== "number") {
+    route.totalAlternativeDurationSeconds = 0;
+  }
+
+  if (Array.isArray(route.loads)) {
+    for (const load of route.loads as any[]) {
+      if (!load.alternative || typeof load.alternative.dropOff !== "string") {
+        load.alternative = {
+          dropOff: load.dropOff === "DROP_B" ? "DROP_A" : "DROP_B",
+          distanceMeters: 0,
+          durationSeconds: 0,
+          dropOffArrival: 0,
+          homeArrival: 0,
+        } satisfies DropAlternative;
+      }
+    }
+  }
+
+  return route;
+}
 
 // GET /api/route/preview?date=YYYY-MM-DD — Returns the saved route for a date.
 export async function GET(request: NextRequest) {
@@ -57,7 +85,7 @@ export async function GET(request: NextRequest) {
         stopCount: route.stopCount,
         status: route.status,
         createdAt: route.createdAt,
-        routeData: JSON.parse(route.routeData) as OptimizedRouteResult,
+        routeData: normalizeRouteData(JSON.parse(route.routeData)),
         idMapping: JSON.parse(route.idMapping),
       },
     });

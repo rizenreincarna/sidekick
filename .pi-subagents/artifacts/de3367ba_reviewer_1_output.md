@@ -1,0 +1,1 @@
+Now the three remaining hooks referenced by the client:

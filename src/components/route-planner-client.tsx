@@ -4,11 +4,13 @@ import { useCallback, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
-import { Loader2, MapPin, Sparkles, ArrowLeft, Route as RouteIcon } from "lucide-react";
+import { Loader2, MapPin, Sparkles, ArrowLeft, Route as RouteIcon, Navigation } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import RouteSummaryPanel from "@/components/route-summary-panel";
+import { FIXED_LOCATIONS } from "@/lib/route-model";
 import type { OptimizedRouteResult, VroomStopDetail } from "@/lib/vroom";
+import { reorderStopsInLoad, reverseStopsInLoad, recalculateRouteTotals } from "@/lib/vroom";
 
 // Three.js uses window/document — MUST be imported with ssr: false.
 const RouteMap3D = dynamic(() => import("@/components/route-map-3d"), {
@@ -34,6 +36,52 @@ export default function RoutePlannerClient() {
   const [trackingTokens, setTrackingTokens] = useState<Record<string, { token: string; completed: boolean }>>({});
   const [heroProfile, setHeroProfile] = useState<{ heroName: string; plateNumber: string; vehicleColor: string; vehicleModel: string; homeLatitude?: number | null; homeLongitude?: number | null } | null>(null);
   const [driverPosition, setDriverPosition] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [customRoutePath, setCustomRoutePath] = useState<[number, number][] | null>(null);
+
+  // Fetch road-following OSRM geometry for the VROOM-ordered route and update
+  // the map overlay. Falls back to null (straight-line stops) if OSRM fails.
+  const fetchRoadPathForRoute = useCallback(async (routeData: OptimizedRouteResult) => {
+    try {
+      const waypoints: { lat: number; lng: number }[] = [];
+      // Start from home
+      if (heroProfile?.homeLatitude != null && heroProfile?.homeLongitude != null) {
+        waypoints.push({ lat: heroProfile.homeLatitude, lng: heroProfile.homeLongitude });
+      } else {
+        waypoints.push({ lat: FIXED_LOCATIONS.HOME.latitude, lng: FIXED_LOCATIONS.HOME.longitude });
+      }
+      // Add each stop in VROOM order across all loads
+      for (const load of routeData.loads) {
+        for (const stop of load.stops) {
+          waypoints.push({ lat: stop.latitude, lng: stop.longitude });
+        }
+        // Return to the appropriate drop-off after each load
+        const drop = load.dropOff === "DROP_B" ? FIXED_LOCATIONS.DROP_B : FIXED_LOCATIONS.DROP_A;
+        waypoints.push({ lat: drop.latitude, lng: drop.longitude });
+        waypoints.push({ lat: FIXED_LOCATIONS.HOME.latitude, lng: FIXED_LOCATIONS.HOME.longitude });
+      }
+      if (waypoints.length < 2) {
+        setCustomRoutePath(null);
+        return;
+      }
+      const res = await fetch("/api/navigation/route", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ waypoints }),
+      });
+      if (!res.ok) {
+        setCustomRoutePath(null);
+        return;
+      }
+      const data = await res.json();
+      if (data.path && data.path.length >= 2) {
+        setCustomRoutePath(data.path as [number, number][]);
+      } else {
+        setCustomRoutePath(null);
+      }
+    } catch {
+      setCustomRoutePath(null);
+    }
+  }, [heroProfile]);
 
   // Load any saved route for the selected date
   const loadSaved = useCallback(async (d: string) => {
@@ -44,6 +92,7 @@ export default function RoutePlannerClient() {
         if (data.route) {
           setRoute(data.route.routeData);
           setRouteStatus(data.route.status);
+          fetchRoadPathForRoute(data.route.routeData);
           // Pre-fetch map tiles for the route area (fire-and-forget)
           const rd = data.route.routeData;
           if (rd?.loads?.length) {
@@ -78,7 +127,7 @@ export default function RoutePlannerClient() {
     } catch {
       /* ignore */
     }
-  }, []);
+  }, [fetchRoadPathForRoute]);
 
   // Fetch hero profile once
   useEffect(() => {
@@ -92,14 +141,14 @@ export default function RoutePlannerClient() {
     loadSaved(date);
   }, [date, loadSaved]);
 
-  const optimize = async () => {
+  const optimize = async (forceDropOffs?: ("DROP_A" | "DROP_B" | undefined)[]) => {
     setLoading(true);
     setError(null);
     try {
       const res = await fetch("/api/route/optimize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date }),
+        body: JSON.stringify({ date, forceDropOffs }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -108,6 +157,7 @@ export default function RoutePlannerClient() {
       } else {
         setRoute(data.route);
         setRouteStatus("OPTIMIZED");
+        fetchRoadPathForRoute(data.route);
         // Pre-fetch map tiles for the route area (fire-and-forget, runs in background)
         if (data.route?.loads?.length) {
           const allStops = data.route.loads.flatMap((l) => l.stops);
@@ -136,8 +186,8 @@ export default function RoutePlannerClient() {
     }
   };
 
-  const saveRoute = async (status?: string) => {
-    if (!route) return;
+  const saveRoute = async (status?: string): Promise<boolean> => {
+    if (!route) return false;
     setSaving(true);
     try {
       const res = await fetch("/api/route/save", {
@@ -156,12 +206,21 @@ export default function RoutePlannerClient() {
           }
           setTrackingTokens(tokens);
         }
+        return true;
       } else {
         setError(data.error || "Save failed");
+        return false;
       }
     } finally {
       setSaving(false);
     }
+  };
+
+  // Start Route → save as STARTED (keeps tracking links + live GPS behavior),
+  // then enter the full-screen in-app navigation mode.
+  const startAndNavigate = async () => {
+    const ok = await saveRoute("STARTED");
+    if (ok) router.push(`/route/navigate?date=${date}`);
   };
 
   // Send GPS location continuously when route is started.
@@ -331,11 +390,7 @@ export default function RoutePlannerClient() {
                   // Persist STOPPED status so the tracking API knows the driver stopped
                   saveRoute("STOPPED");
                   // Clear driver position on the server so the tracking link shows the exception
-                  fetch("/api/driver/location", {
-                    method: "DELETE",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ confirm: true }),
-                  }).catch(() => {});
+                  fetch("/api/driver/location", { method: "DELETE" }).catch(() => {});
                 }}
                 title="Emergency: stop GPS tracking immediately"
                 className="flex items-center gap-1.5 px-2 py-1 rounded-full text-[0.625rem] font-bold transition-transform active:scale-90"
@@ -357,7 +412,7 @@ export default function RoutePlannerClient() {
               className="h-9 w-[150px] border-white/10 bg-white/5 text-sm text-foreground"
             />
             <Button
-              onClick={optimize}
+              onClick={() => optimize()}
               disabled={loading}
               size="sm"
               className="gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90"
@@ -377,6 +432,16 @@ export default function RoutePlannerClient() {
                 className="gap-1.5 border-white/10 bg-white/5 hover:bg-white/10 lg:hidden"
               >
                 {panelOpen ? "Map" : "Stops"}
+              </Button>
+            )}
+            {route && routeStatus === "STARTED" && (
+              <Button
+                onClick={() => router.push(`/route/navigate?date=${date}`)}
+                size="sm"
+                className="gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                <Navigation className="h-4 w-4" />
+                Navigate
               </Button>
             )}
           </div>
@@ -404,6 +469,7 @@ export default function RoutePlannerClient() {
               driverPosition={driverPosition}
               routeStatus={routeStatus}
               trackingTokens={trackingTokens}
+              customRoutePath={customRoutePath ?? undefined}
             />
           ) : (
             <div className="flex h-full w-full flex-col items-center justify-center bg-background text-center text-muted-foreground">
@@ -429,13 +495,36 @@ export default function RoutePlannerClient() {
               selectedOrderId={selectedOrderId}
               onSelectStop={onSelectStop}
               onSaveRoute={() => saveRoute()}
-              onStartRoute={() => saveRoute("STARTED")}
+              onStartRoute={startAndNavigate}
               saving={saving}
               routeStatus={routeStatus}
               trackingTokens={trackingTokens}
               routeDate={date}
               onMarkComplete={markComplete}
               onUndoComplete={undoComplete}
+              onToggleDropOff={async (loadIndex, dropOff) => {
+                if (!route) return;
+                const forceDropOffs = route.loads.map((l, i) =>
+                  i === loadIndex ? dropOff : l.dropOff
+                );
+                await optimize(forceDropOffs);
+              }}
+              onReorderStops={(loadIndex, fromIndex, toIndex) => {
+                if (!route) return;
+                const newLoads = [...route.loads];
+                newLoads[loadIndex] = reorderStopsInLoad(newLoads[loadIndex], fromIndex, toIndex, heroProfile?.homeLatitude && heroProfile?.homeLongitude ? { latitude: heroProfile.homeLatitude, longitude: heroProfile.homeLongitude } : undefined);
+                const updated = recalculateRouteTotals({ ...route, loads: newLoads });
+                setRoute(updated);
+                fetchRoadPathForRoute(updated);
+              }}
+              onReverseLoad={(loadIndex) => {
+                if (!route) return;
+                const newLoads = [...route.loads];
+                newLoads[loadIndex] = reverseStopsInLoad(newLoads[loadIndex], heroProfile?.homeLatitude && heroProfile?.homeLongitude ? { latitude: heroProfile.homeLatitude, longitude: heroProfile.homeLongitude } : undefined);
+                const updated = recalculateRouteTotals({ ...route, loads: newLoads });
+                setRoute(updated);
+                fetchRoadPathForRoute(updated);
+              }}
             />
           </aside>
         )}

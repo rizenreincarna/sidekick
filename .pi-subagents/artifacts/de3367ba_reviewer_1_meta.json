@@ -1,0 +1,39 @@
+{
+  "runId": "de3367ba",
+  "agent": "reviewer",
+  "task": "[Read from: /root/my-app/plan.md, /root/my-app/progress.md]\n\nPerform a rigorous security + React correctness audit of these Next.js app router files:\n\n- /root/sidekick-dev/src/app/api/navigation/route/route.ts (OSRM proxy)\n- /root/sidekick-dev/src/app/api/route/navigation/route.ts (route retrieval)\n- /root/sidekick-dev/src/app/route/navigate/page.tsx\n- /root/sidekick-dev/src/components/navigation-client.tsx\n- /root/sidekick-dev/src/components/navigation-map-maplibre.tsx\n- /root/sidekick-dev/src/components/navigation-maneuver-card.tsx\n- /root/sidekick-dev/src/components/navigation-bottom-panel.tsx\n- /root/sidekick-dev/src/components/navigation-exit-dialog.tsx\n\nAlso read /root/sidekick-dev/src/lib/session.ts and /root/sidekick-dev/src/components/route-planner-client.tsx for context (the diff there wires Start Route to /route/navigate).\n\nHunt specifically for:\n1. AuthZ/AuthN gaps: unauthenticated or cross-user access (userId param handling — compare with how /api/route/preview handles it), privilege escalation.\n2. Privacy: can customer PII leak to OSRM or the browser beyond necessity? localStorage sensitive data?\n3. Input validation: lat/lng ranges, date format, JSON body size, cache key collisions, cache memory exhaustion.\n4. SSR/CSR issues: window/document access during SSR, maplibre-gl imported server-side, hydration mismatches.\n5. React issues: stale closures, effect dep problems, missing cleanup (map instance, markers, rAF), error states that can't be recovered, state updates after unmount.\n6. XSS/injection: dangerouslySetInnerHTML, innerHTML usage with user data (stop titles in marker DOM?), tel: and other URL schemes.\n7. MapLibre v6 API misuse (e.g. addLayer before style loaded, source updates on missing style).\n8. Accessibility gaps in the new UI.\n\nFor each finding: file:line, severity (critical/high/medium/low), concise explanation, concrete fix suggestion. Verify claims against actual code. Do NOT edit files — report only. Return a numbered list ordered by severity.",
+  "exitCode": 1,
+  "usage": {
+    "input": 35653,
+    "output": 2702,
+    "cacheRead": 270848,
+    "cacheWrite": 0,
+    "cost": 0.22874340000000004,
+    "turns": 18
+  },
+  "model": "opencode-go/kimi-k3:high",
+  "attemptedModels": [
+    "opencode-go/kimi-k3:high"
+  ],
+  "modelAttempts": [
+    {
+      "model": "opencode-go/kimi-k3:high",
+      "success": false,
+      "exitCode": 1,
+      "error": "401: {\"type\":\"CreditsError\",\"message\":\"Insufficient balance. Manage your billing here: https://opencode.ai/workspace/wrk_01KV5BJ7S53KTWSGRSFHFKPGEN/billing\"}",
+      "usage": {
+        "input": 35653,
+        "output": 2702,
+        "cacheRead": 270848,
+        "cacheWrite": 0,
+        "cost": 0.22874340000000004,
+        "turns": 18
+      }
+    }
+  ],
+  "durationMs": 193098,
+  "toolCount": 26,
+  "error": "401: {\"type\":\"CreditsError\",\"message\":\"Insufficient balance. Manage your billing here: https://opencode.ai/workspace/wrk_01KV5BJ7S53KTWSGRSFHFKPGEN/billing\"}",
+  "transcriptPath": "/root/my-app/.pi-subagents/artifacts/de3367ba_reviewer_1_transcript.jsonl",
+  "timestamp": 1784834604755
+}

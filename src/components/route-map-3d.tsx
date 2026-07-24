@@ -766,22 +766,37 @@ export default function RouteMap3D({ route, onSelectStop, selectedOrderId, heroP
     }
     const paths: PathInfo[] = [];
     const loadColors = [0x38bdf8, 0xf472b6, 0xa3e635, 0xfbbf24, 0x67e8f9];
-    if (isTracking && customRoutePath && customRoutePath.length >= 2) {
-      // Use the custom path from the tracking API (driver pos → stops → customer)
+    if (customRoutePath && customRoutePath.length >= 2) {
+      // Use the road-following custom path when available (tracking or planner).
+      // Render as a thick TubeGeometry so the line has real width regardless of
+      // GPU line-width limits (Three.js LineBasicMaterial.linewidth is ignored).
       const pts = customRoutePath.map(([lat, lon]) => latLonToVector3(lat, lon));
-      const col = 0x22c55e; // green for tracking route
-      const geo = new THREE.BufferGeometry().setFromPoints(pts);
-      const mat = new THREE.LineBasicMaterial({ color: col, linewidth: 2, transparent: true, opacity: 0.9 });
-      const line = new THREE.Line(geo, mat);
-      line.position.y = span * 0.006;
-      scene.add(line);
-      const glowMat = new THREE.LineBasicMaterial({ color: col, transparent: true, opacity: 0.25 });
-      const glow = new THREE.Line(geo.clone(), glowMat);
-      glow.position.y = span * 0.004;
-      scene.add(glow);
-      disposables.push(geo, mat, glowMat, glow.geometry);
-      paths.push({ line, points: pts, glow });
-    } else {
+      const col = isTracking ? 0x22c55e : loadColors[0]; // green for tracking, blue-ish for planner
+
+      // Sub-sample very dense paths to keep TubeGeometry fast.
+      const step = Math.max(1, Math.floor(pts.length / 600));
+      const sparsePts: THREE.Vector3[] = [];
+      for (let i = 0; i < pts.length; i += step) sparsePts.push(pts[i]);
+      sparsePts.push(pts[pts.length - 1]);
+
+      const thickness = span * 0.0014;
+      const curve = new THREE.CatmullRomCurve3(sparsePts);
+      const tubeGeo = new THREE.TubeGeometry(curve, sparsePts.length * 2, thickness, 6, false);
+      const tubeMat = new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.95 });
+      const tube = new THREE.Mesh(tubeGeo, tubeMat);
+      tube.position.y = span * 0.006;
+      scene.add(tube);
+
+      // Glow underlay (larger tube, dimmer)
+      const glowGeo = new THREE.TubeGeometry(curve, sparsePts.length * 2, thickness * 2.2, 6, false);
+      const glowMat = new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.25 });
+      const glowTube = new THREE.Mesh(glowGeo, glowMat);
+      glowTube.position.y = span * 0.004;
+      scene.add(glowTube);
+
+      disposables.push(tubeGeo, tubeMat, glowGeo, glowMat);
+      paths.push({ line: tube as unknown as THREE.Line, points: pts, glow: glowTube as unknown as THREE.Line });
+    } else if (!isTracking) {
     route.loads.forEach((load, li) => {
       const pts: THREE.Vector3[] = [];
       pts.push(latLonToVector3(homeLoc.latitude, homeLoc.longitude));
