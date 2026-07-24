@@ -24,7 +24,6 @@ import { targetActionLabel, type NavigationTarget } from "@/lib/navigation";
 interface Props {
   target: NavigationTarget;
   isLastTarget: boolean;
-  stopIndex: number; // 1-based position among remaining
   totalTargets: number;
   completedCount: number;
   arrived: boolean;
@@ -64,7 +63,6 @@ function kindLabel(kind: NavigationTarget["kind"]) {
 export default function NavigationBottomPanel({
   target,
   isLastTarget,
-  stopIndex,
   totalTargets,
   completedCount,
   arrived,

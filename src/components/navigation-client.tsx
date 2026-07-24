@@ -51,7 +51,7 @@ const NavigationMap = dynamic(() => import("@/components/navigation-map-maplibre
   ),
 });
 
-type Phase = "loading" | "no-route" | "not-started" | "confirm" | "nav" | "load-error";
+type Phase = "loading" | "no-route" | "not-started" | "completed-route" | "confirm" | "nav" | "load-error";
 
 interface LoadedRoute {
   status: string;
@@ -112,7 +112,13 @@ export default function NavigationClient() {
         }
         setRoute({ status: data.route.status, routeData: data.route.routeData });
         setTokens(data.tokens || {});
-        setPhase(data.route.status === "STARTED" ? "confirm" : "not-started");
+        setPhase(
+          data.route.status === "STARTED"
+            ? "confirm"
+            : data.route.status === "COMPLETED"
+              ? "completed-route"
+              : "not-started"
+        );
       } catch {
         if (!cancelled) {
           setLoadError("Network error — could not reach the server.");
@@ -181,13 +187,14 @@ export default function NavigationClient() {
     routeDate: date,
     speak: speech.speak,
     muted: speech.muted,
-    onArrive: (t) => {
+    gpsStatus: gpsStatus,
+    onArrive: () => {
+      // Arrival speech is handled by the engine; here we only buzz.
       try {
         navigator.vibrate?.([200, 100, 200]);
       } catch {
         /* unsupported */
       }
-      speech.speak(`Arriving at ${t.title}`, { force: true });
     },
   });
   engineRef.current = engine;
@@ -228,10 +235,24 @@ export default function NavigationClient() {
     };
   }, [phase, simulate, date]);
 
-  // Clear stale session when the route completes
+  // Persist route status as COMPLETED when the engine finishes the route.
   useEffect(() => {
-    if (engine.status === "completed") clearNavSession();
-  }, [engine.status]);
+    if (engine.status !== "completed") return;
+    clearNavSession();
+    if (!route || route.status === "COMPLETED") return;
+    (async () => {
+      try {
+        await fetch("/api/route/save", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ date, routeData: route.routeData, status: "COMPLETED" }),
+        });
+        setRoute((r) => (r ? { ...r, status: "COMPLETED" } : r));
+      } catch {
+        // Non-blocking: the DB may briefly lag, but the driver already sees the completion screen.
+      }
+    })();
+  }, [engine.status, route, date]);
 
   // -------------------------------------------------------------------------
   // Actions
@@ -397,6 +418,35 @@ export default function NavigationClient() {
     );
   }
 
+  // ---------- Route was already completed previously ----------
+  if (phase === "completed-route") {
+    return (<FullScreenMessage>
+        <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary/15">
+          <CheckCircle2 className="h-12 w-12 text-primary" />
+        </div>
+        <h1 className="mt-4 text-2xl font-bold text-foreground">Route Completed</h1>
+        <p className="mt-1 text-sm text-muted-foreground">This route has already been finished for {date}.</p>
+        <div className="mt-5 grid grid-cols-3 gap-2">
+          <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-center">
+            <div className="text-[0.625rem] uppercase tracking-wider text-muted-foreground">Stops</div>
+            <div className="text-xl font-bold text-foreground">{engine.totalTargets}/{engine.totalTargets}</div>
+          </div>
+          <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-center">
+            <div className="text-[0.625rem] uppercase tracking-wider text-muted-foreground">Distance</div>
+            <div className="text-xl font-bold text-foreground">{((route?.routeData.totalDistanceMeters ?? 0) / 1000).toFixed(1)}<span className="text-xs"> km</span></div>
+          </div>
+          <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-center">
+            <div className="text-[0.625rem] uppercase tracking-wider text-muted-foreground">Planned</div>
+            <div className="text-xl font-bold text-foreground">{Math.round((route?.routeData.totalDurationSeconds ?? 0) / 60)}<span className="text-xs"> min</span></div>
+          </div>
+        </div>
+        <Button onClick={() => router.push("/route")} className="mt-6 gap-2 bg-primary text-primary-foreground">
+          <ArrowLeft className="h-4 w-4" /> Back to planner
+        </Button>
+      </FullScreenMessage>
+    );
+  }
+
   // ---------- Start / resume confirmation ----------
   if (phase === "confirm") {
     const upcoming = targets.filter((t) => !t.completed);
@@ -450,6 +500,27 @@ export default function NavigationClient() {
             Simulation mode — GPS is simulated, nothing is reported
           </p>
         )}
+      </FullScreenMessage>
+    );
+  }
+
+  // ---------- Engine error (unrecoverable) ----------
+  if (engine.status === "error") {
+    return (
+      <FullScreenMessage>
+        <AlertTriangle className="h-10 w-10 text-destructive" />
+        <h1 className="mt-3 text-lg font-semibold text-foreground">Navigation unavailable</h1>
+        <p className="mt-1 max-w-xs text-center text-sm text-muted-foreground">
+          {engine.error || "Something went wrong and navigation can’t continue."}
+        </p>
+        <div className="mt-5 flex gap-2">
+          <Button variant="outline" onClick={() => router.push("/route")} className="border-white/10 bg-white/5">
+            Back to planner
+          </Button>
+          <Button onClick={() => window.location.reload()} className="bg-primary text-primary-foreground">
+            Retry
+          </Button>
+        </div>
       </FullScreenMessage>
     );
   }
@@ -524,6 +595,11 @@ export default function NavigationClient() {
             <Loader2 className="h-4 w-4 animate-spin text-primary" /> Getting directions…
           </div>
         )}
+        {navigating && !engine.leg && engine.status === "ready" && (gpsStatus === "requesting" || gpsStatus === "idle") && (
+          <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-[#0b1417]/95 px-4 py-2.5 text-sm text-[#c9d9d6] backdrop-blur-md">
+            <Loader2 className="h-4 w-4 animate-spin text-primary" /> Finding your location…
+          </div>
+        )}
         {engine.warning && (
           <div className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/15 px-4 py-2.5 text-xs text-amber-200 backdrop-blur-md">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -586,7 +662,6 @@ export default function NavigationClient() {
           <NavigationBottomPanel
             target={engine.activeTarget}
             isLastTarget={isLastTarget}
-            stopIndex={engine.completedCount + 1}
             totalTargets={engine.totalTargets}
             completedCount={engine.completedCount}
             arrived={engine.status === "arrived"}

@@ -699,14 +699,24 @@
   50% { box-shadow: 0 0 0 10px rgba(45, 212, 191, 0); }
 }
 
-/* MapLibre attribution — keep readable on dark cockpit */
+/* MapLibre attribution & logo — keep readable on dark cockpit, and lift the
+   bottom control groups above the navigation bottom panel so the OpenStreetMap
+   attribution stays visible (license requirement). MapLibre's stylesheet loads
+   after globals, so !important is needed to win specificity. */
 .maplibregl-ctrl-attrib {
-  background: rgba(11, 20, 23, 0.75) !important;
+  background: rgba(11, 20, 23, 0.78) !important;
   color: #94a3b8 !important;
   font-size: 10px;
+  max-width: 70vw !important;
 }
 .maplibregl-ctrl-attrib a {
   color: #5eead4 !important;
+}
+/* Attribution + logo sit at bottom-right by default (logo bottom-left); lift
+   both control containers above the bottom panel (~210 px tall). */
+.maplibregl-ctrl-bottom-right,
+.maplibregl-ctrl-bottom-left {
+  bottom: 212px !important;
 }
 
 @media (prefers-reduced-motion: reduce) {

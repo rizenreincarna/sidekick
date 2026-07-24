@@ -8,6 +8,7 @@ import { Loader2, MapPin, Sparkles, ArrowLeft, Route as RouteIcon, Navigation } 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import RouteSummaryPanel from "@/components/route-summary-panel";
+import { FIXED_LOCATIONS } from "@/lib/route-model";
 import type { OptimizedRouteResult, VroomStopDetail } from "@/lib/vroom";
 
 // Three.js uses window/document — MUST be imported with ssr: false.
@@ -34,6 +35,52 @@ export default function RoutePlannerClient() {
   const [trackingTokens, setTrackingTokens] = useState<Record<string, { token: string; completed: boolean }>>({});
   const [heroProfile, setHeroProfile] = useState<{ heroName: string; plateNumber: string; vehicleColor: string; vehicleModel: string; homeLatitude?: number | null; homeLongitude?: number | null } | null>(null);
   const [driverPosition, setDriverPosition] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [customRoutePath, setCustomRoutePath] = useState<[number, number][] | null>(null);
+
+  // Fetch road-following OSRM geometry for the VROOM-ordered route and update
+  // the map overlay. Falls back to null (straight-line stops) if OSRM fails.
+  const fetchRoadPathForRoute = useCallback(async (routeData: OptimizedRouteResult) => {
+    try {
+      const waypoints: { lat: number; lng: number }[] = [];
+      // Start from home
+      if (heroProfile?.homeLatitude != null && heroProfile?.homeLongitude != null) {
+        waypoints.push({ lat: heroProfile.homeLatitude, lng: heroProfile.homeLongitude });
+      } else {
+        waypoints.push({ lat: FIXED_LOCATIONS.HOME.latitude, lng: FIXED_LOCATIONS.HOME.longitude });
+      }
+      // Add each stop in VROOM order across all loads
+      for (const load of routeData.loads) {
+        for (const stop of load.stops) {
+          waypoints.push({ lat: stop.latitude, lng: stop.longitude });
+        }
+        // Return to the appropriate drop-off after each load
+        const drop = load.dropOff === "DROP_B" ? FIXED_LOCATIONS.DROP_B : FIXED_LOCATIONS.DROP_A;
+        waypoints.push({ lat: drop.latitude, lng: drop.longitude });
+        waypoints.push({ lat: FIXED_LOCATIONS.HOME.latitude, lng: FIXED_LOCATIONS.HOME.longitude });
+      }
+      if (waypoints.length < 2) {
+        setCustomRoutePath(null);
+        return;
+      }
+      const res = await fetch("/api/navigation/route", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ waypoints }),
+      });
+      if (!res.ok) {
+        setCustomRoutePath(null);
+        return;
+      }
+      const data = await res.json();
+      if (data.path && data.path.length >= 2) {
+        setCustomRoutePath(data.path as [number, number][]);
+      } else {
+        setCustomRoutePath(null);
+      }
+    } catch {
+      setCustomRoutePath(null);
+    }
+  }, [heroProfile]);
 
   // Load any saved route for the selected date
   const loadSaved = useCallback(async (d: string) => {
@@ -44,6 +91,7 @@ export default function RoutePlannerClient() {
         if (data.route) {
           setRoute(data.route.routeData);
           setRouteStatus(data.route.status);
+          fetchRoadPathForRoute(data.route.routeData);
           // Pre-fetch map tiles for the route area (fire-and-forget)
           const rd = data.route.routeData;
           if (rd?.loads?.length) {
@@ -78,7 +126,7 @@ export default function RoutePlannerClient() {
     } catch {
       /* ignore */
     }
-  }, []);
+  }, [fetchRoadPathForRoute]);
 
   // Fetch hero profile once
   useEffect(() => {
@@ -108,6 +156,7 @@ export default function RoutePlannerClient() {
       } else {
         setRoute(data.route);
         setRouteStatus("OPTIMIZED");
+        fetchRoadPathForRoute(data.route);
         // Pre-fetch map tiles for the route area (fire-and-forget, runs in background)
         if (data.route?.loads?.length) {
           const allStops = data.route.loads.flatMap((l) => l.stops);
@@ -419,6 +468,7 @@ export default function RoutePlannerClient() {
               driverPosition={driverPosition}
               routeStatus={routeStatus}
               trackingTokens={trackingTokens}
+              customRoutePath={customRoutePath ?? undefined}
             />
           ) : (
             <div className="flex h-full w-full flex-col items-center justify-center bg-background text-center text-muted-foreground">

@@ -163,6 +163,37 @@ interface OsrmRouteResponse {
   routes?: OsrmRoute[];
 }
 
+/**
+ * Request a driving route through an ordered list of waypoints.
+ * Returns a single road-following path that visits every waypoint in order.
+ * Falls back to a straight-line path if OSRM cannot route.
+ */
+export async function fetchOsrmRouteMulti(
+  waypoints: { lat: number; lng: number }[],
+  signal?: AbortSignal
+): Promise<NavRouteResult | null> {
+  const valid = waypoints.filter((p) => isValidLatLng(p.lat, p.lng));
+  if (valid.length < 2) return null;
+
+  const coords = valid.map((p) => `${p.lng},${p.lat}`).join(";");
+  const url =
+    `${OSRM_INTERNAL_URL}/route/v1/driving/${coords}` +
+    `?overview=full&geometries=geojson&steps=false&alternatives=false`;
+
+  const timeout = AbortSignal.timeout(OSRM_TIMEOUT_MS);
+  const combined = signal ? AbortSignal.any([signal, timeout]) : timeout;
+
+  try {
+    const res = await fetch(url, { signal: combined, cache: "no-store" });
+    if (!res.ok) return null;
+    const data = (await res.json()) as OsrmRouteResponse;
+    if (data.code !== "Ok" || !data.routes?.length) return null;
+    return normalizeOsrmRoute(data.routes[0]);
+  } catch {
+    return null;
+  }
+}
+
 export function normalizeOsrmRoute(route: OsrmRoute): NavRouteResult {
   const coords = route.geometry?.coordinates ?? [];
   const path: PathPoint[] = coords.map((c) => [c[1], c[0]] as PathPoint);
@@ -212,6 +243,7 @@ export function maneuverIconKey(type: string, modifier: string | null): string {
   if (type === "fork") return (modifier ?? "").includes("left") ? "fork-left" : "fork-right";
   if (type === "on ramp") return "ramp";
   if (type === "off ramp") return "exit";
+  if (type === "offline") return "offline";
   if (type === "notification") return "straight";
   const mod = modifier ?? "";
   if (mod.includes("uturn")) return "uturn";

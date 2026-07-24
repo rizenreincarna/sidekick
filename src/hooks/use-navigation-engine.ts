@@ -57,6 +57,10 @@ interface EngineOptions {
   muted: boolean;
   /** Called whenever the machine detects arrival at the active target. */
   onArrive?: (target: NavigationTarget) => void;
+  /** GPS acquisition state from use-driver-location ("idle" | "requesting" |
+   *  "active" | "denied" | "unavailable"). Used to decide whether to wait for
+   *  a real fix or fall back to Home. */
+  gpsStatus?: "idle" | "requesting" | "active" | "denied" | "unavailable";
 }
 
 const OFF_ROUTE_THRESHOLD_M = 40;
@@ -71,7 +75,7 @@ const DEFAULT_SPEED_MPS = 25_000 / 3600; // 25 km/h offline ETA fallback
 const FAR_FROM_ROUTE_KM = 100;
 
 export function useNavigationEngine(options: EngineOptions) {
-  const { targets, initialTargetIndex = 0, position, active, routeDate, speak, muted, onArrive } = options;
+  const { targets, initialTargetIndex = 0, position, active, routeDate, speak, muted, onArrive, gpsStatus = "requesting" } = options;
 
   const [status, setStatus] = useState<NavEngineState>("loading");
   const [error, setError] = useState<string | null>(null);
@@ -102,7 +106,7 @@ export function useNavigationEngine(options: EngineOptions) {
   const slowSinceRef = useRef<number | null>(null);
   const lastRerouteAtRef = useRef(0);
   const smoothedAlongRef = useRef(0);
-  const announcedRef = useRef<{ stepIndex: number; near100: boolean }>({ stepIndex: -1, near100: false });
+  const announcedRef = useRef<{ stepIndex: number; near100: boolean; near300: boolean }>({ stepIndex: -1, near100: false, near300: false });
   const speakRef = useRef(speak);
   const onArriveRef = useRef(onArrive);
 
@@ -113,6 +117,22 @@ export function useNavigationEngine(options: EngineOptions) {
   positionRef.current = position;
   completedIdsRef.current = completedIds;
   skippedIdsRef.current = skippedIds;
+
+  // Resume support: the engine hook mounts before the user taps Start/Resume,
+  // so the initialTargetIndex prop can change after mount. Honor it — but only
+  // while the machine hasn't started moving (loading/ready), never mid-leg.
+  useEffect(() => {
+    if (status === "loading" || status === "ready") {
+      setStartIndex(initialTargetIndex);
+    }
+  }, [initialTargetIndex, status]);
+
+  // Abort any in-flight leg request on unmount
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, []);
 
   /** Upcoming = not completed, not skipped. Index 0 is always the next stop;
    *  startIndex only matters for the very first leg (resume support). */
@@ -181,7 +201,7 @@ export function useNavigationEngine(options: EngineOptions) {
     legRef.current = newLeg;
     setLeg(newLeg);
     smoothedAlongRef.current = 0;
-    announcedRef.current = { stepIndex: -1, near100: false };
+    announcedRef.current = { stepIndex: -1, near100: false, near300: false };
     offRouteSinceRef.current = null;
     slowSinceRef.current = null;
     setOffRoute(false);
@@ -237,7 +257,8 @@ export function useNavigationEngine(options: EngineOptions) {
           bounds: data.bounds,
           offline: false,
         });
-        setStatus("navigating");
+        // Do not clobber a completed route if the driver finished mid-request
+        if (statusRef.current !== "completed") setStatus("navigating");
       } catch (err) {
         if (seq !== requestSeqRef.current) return;
         if (err instanceof Error && err.name === "AbortError") return;
@@ -285,15 +306,20 @@ export function useNavigationEngine(options: EngineOptions) {
         setWarning(`You are ${Math.round(distToTargetKm)} km from the next stop — check the route date.`);
       }
       requestLegRef.current({ lat: fix.lat, lng: fix.lng }, target);
-    } else {
+    } else if (gpsStatus === "denied" || gpsStatus === "unavailable") {
+      // GPS truly failed — start from Home so the driver still gets a line.
       setWarning("GPS unavailable — starting from Home. Follow the line to your first stop.");
       requestLegRef.current(
         { lat: FIXED_LOCATIONS.HOME.latitude, lng: FIXED_LOCATIONS.HOME.longitude },
         target
       );
     }
+    // else: GPS still acquiring (requesting/active) — hold in "ready" and wait
+    // for a real fix rather than prematurely snapping to Home. This effect
+    // re-runs whenever `position` or `gpsStatus` change, so the first real fix
+    // triggers the leg immediately.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, status]);
+  }, [active, status, position, gpsStatus]);
 
   // Persist lightweight session for resume (non-sensitive fields only)
   useEffect(() => {
@@ -361,7 +387,7 @@ export function useNavigationEngine(options: EngineOptions) {
     if (step) {
       const announced = announcedRef.current;
       if (announced.stepIndex !== stepIdx) {
-        announcedRef.current = { stepIndex: stepIdx, near100: false };
+        announcedRef.current = { stepIndex: stepIdx, near100: false, near300: false };
         if (step.maneuverType === "arrive") {
           speakRef.current(step.voiceInstruction);
         } else if (step.maneuverType === "depart" || step.maneuverType === "offline") {
@@ -370,9 +396,15 @@ export function useNavigationEngine(options: EngineOptions) {
           const distText = formatDistance(toManeuver);
           speakRef.current(toManeuver > 200 ? `In ${distText}, ${step.voiceInstruction}` : step.voiceInstruction);
         }
-      } else if (!announced.near100 && toManeuver <= 100 && step.maneuverType !== "arrive" && step.maneuverType !== "depart") {
-        announcedRef.current.near100 = true;
-        speakRef.current(step.voiceInstruction);
+      } else {
+        if (!announced.near300 && toManeuver <= 300 && toManeuver > 100 && step.maneuverType !== "arrive" && step.maneuverType !== "depart") {
+          announcedRef.current.near300 = true;
+          speakRef.current(`In 300 meters, ${step.voiceInstruction}`);
+        }
+        if (!announced.near100 && toManeuver <= 100 && step.maneuverType !== "arrive" && step.maneuverType !== "depart") {
+          announcedRef.current.near100 = true;
+          speakRef.current(step.voiceInstruction);
+        }
       }
     }
 

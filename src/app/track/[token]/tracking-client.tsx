@@ -348,6 +348,23 @@ export function TrackingClient({ token }: { token: string }) {
                     customRoutePath={data?.routePath ?? null}
                     followDriver={followDriver && state === "live"}
                   />
+                ) : state === "completed" ? (
+                  <div className="flex h-full w-full flex-col items-center justify-center gap-3 p-6 text-center" style={{ background: "oklch(0.13 0.02 180)" }}>
+                    <div className="flex h-16 w-16 items-center justify-center rounded-full" style={{ background: "rgba(52,211,153,0.15)" }}>
+                      <CheckCircle2 className="h-8 w-8" style={{ color: "var(--nc-primary)" }} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-extrabold" style={{ color: "var(--nc-text)" }}>Pickup completed</p>
+                      <p className="mt-1 text-xs" style={{ color: "var(--nc-muted)" }}>
+                        {data?.completedAt ? `Completed at ${formatMY(new Date(data.completedAt))}` : "Thank you for recycling with ERTH."}
+                      </p>
+                    </div>
+                  </div>
+                ) : state === "scheduled" ? (
+                  <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-4 text-center" style={{ background: "oklch(0.13 0.02 180)" }}>
+                    <MapPin className="h-8 w-8" style={{ color: "var(--nc-muted)" }} />
+                    <p className="text-xs" style={{ color: "var(--nc-muted)" }}>Live map will appear once the driver starts the route.</p>
+                  </div>
                 ) : (
                   <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-4 text-center" style={{ background: "oklch(0.13 0.02 180)" }}>
                     <Loader2 className="h-8 w-8 animate-spin text-emerald-400" />

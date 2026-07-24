@@ -38,7 +38,7 @@ async function getRouteInfo(userId: string, routeDate: string): Promise<{ stops:
   try {
     routeData = JSON.parse(route.routeData);
   } catch {
-    return null;
+    return { stops: null, status: null };
   }
   if (!routeData?.loads) return { stops: null, status: route.status };
 
@@ -71,9 +71,10 @@ async function getRouteInfo(userId: string, routeDate: string): Promise<{ stops:
   return { stops, status: route.status };
 }
 
-// Query OSRM for the travel time (seconds) and distance (meters) along a sequence of coordinates
-async function osrmRoute(coords: [number, number][]): Promise<{ duration: number; distance: number } | null> {
-  if (coords.length < 2) return { duration: 0, distance: 0 };
+// Query OSRM for the travel time (seconds), distance (meters) and road-following
+// geometry along a sequence of coordinates.
+async function osrmRoute(coords: [number, number][]): Promise<{ duration: number; distance: number; path: [number, number][] } | null> {
+  if (coords.length < 2) return { duration: 0, distance: 0, path: coords };
   try {
     // OSRM expects lon,lat;lon,lat
     const coordStr = coords.map(([lat, lon]) => `${lon},${lat}`).join(";");
@@ -82,9 +83,11 @@ async function osrmRoute(coords: [number, number][]): Promise<{ duration: number
     if (!res.ok) return null;
     const data = await res.json();
     if (!data.routes || data.routes.length === 0) return null;
+    const geometry: [number, number][] = data.routes[0].geometry?.coordinates ?? [];
     return {
       duration: data.routes[0].duration, // seconds
       distance: data.routes[0].distance, // meters
+      path: geometry.map(([lng, lat]) => [lat, lng] as [number, number]),
     };
   } catch {
     return null;
@@ -190,16 +193,16 @@ export async function GET(
       [link.latitude, link.longitude],
     ];
 
-    routePath = coords;
-
-    // Try OSRM for accurate road-based travel time
+    // Try OSRM for accurate road-based travel time AND geometry
     let travelDuration = 0;
     let travelDistance = 0;
     const osrmResult = await osrmRoute(coords);
     if (osrmResult) {
       travelDuration = osrmResult.duration;
       travelDistance = osrmResult.distance;
+      routePath = osrmResult.path.length >= 2 ? osrmResult.path : coords;
     } else {
+      routePath = coords;
       // Fallback: sum haversine distances between consecutive stops
       for (let i = 0; i < coords.length - 1; i++) {
         const leg = haversineEta(coords[i], coords[i + 1]);
