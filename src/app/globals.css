@@ -612,3 +612,113 @@
   .pulse-soft, .stagger > * { animation: none !important; }
   .page-enter, .fade-up, .fade-in, .r3d-mount, .animate-fade-in-up { opacity: 1 !important; transform: none !important; }
 }
+/* ============================================================
+   In-app navigation (MapLibre driver mode)
+   ============================================================ */
+
+/* Dark cockpit filter — applies to the map canvas ONLY, never UI overlays */
+.nav-map-dark .maplibregl-canvas {
+  filter: invert(0.9) hue-rotate(180deg) saturate(0.8) brightness(0.95);
+}
+
+/* Vehicle orb marker (rotates with travel bearing via inline transform) */
+.nav-vehicle {
+  width: 44px;
+  height: 44px;
+  position: relative;
+  will-change: transform;
+}
+.nav-vehicle-orb {
+  position: absolute;
+  inset: 11px;
+  border-radius: 9999px;
+  background: radial-gradient(circle at 35% 30%, #7dd3fc 0%, #2dd4bf 45%, #0d9488 100%);
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  box-shadow:
+    0 0 10px rgba(45, 212, 191, 0.8),
+    0 0 24px rgba(45, 212, 191, 0.45);
+}
+.nav-vehicle-cone {
+  position: absolute;
+  left: 50%;
+  top: -7px;
+  width: 0;
+  height: 0;
+  transform: translateX(-50%);
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-bottom: 16px solid rgba(45, 212, 191, 0.85);
+  filter: drop-shadow(0 0 6px rgba(45, 212, 191, 0.6));
+}
+
+/* Stop markers */
+.nav-stop {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9999px;
+  background: #0f172a;
+  border: 2px solid rgba(148, 163, 184, 0.6);
+  color: #cbd5e1;
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+.nav-stop svg {
+  width: 15px;
+  height: 15px;
+}
+.nav-stop-active {
+  background: #2dd4bf;
+  border-color: #ffffff;
+  color: #042f2e;
+  transform: scale(1.2);
+  box-shadow:
+    0 0 12px rgba(45, 212, 191, 0.8),
+    0 2px 8px rgba(0, 0, 0, 0.5);
+  animation: nav-stop-pulse 1.6s ease-in-out infinite;
+}
+.nav-stop-done {
+  opacity: 0.45;
+  background: #1e293b;
+  border-color: rgba(100, 116, 139, 0.5);
+}
+@keyframes nav-stop-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(45, 212, 191, 0.45), 0 2px 8px rgba(0, 0, 0, 0.5); }
+  50% { box-shadow: 0 0 0 9px rgba(45, 212, 191, 0), 0 2px 8px rgba(0, 0, 0, 0.5); }
+}
+
+/* Arrival pulse on the primary action button */
+.nav-pulse-ring {
+  animation: nav-pulse-ring 1.6s ease-in-out infinite;
+}
+@keyframes nav-pulse-ring {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(45, 212, 191, 0.5); }
+  50% { box-shadow: 0 0 0 10px rgba(45, 212, 191, 0); }
+}
+
+/* MapLibre attribution & logo — keep readable on dark cockpit, and lift the
+   bottom control groups above the navigation bottom panel so the OpenStreetMap
+   attribution stays visible (license requirement). MapLibre's stylesheet loads
+   after globals, so !important is needed to win specificity. */
+.maplibregl-ctrl-attrib {
+  background: rgba(11, 20, 23, 0.78) !important;
+  color: #94a3b8 !important;
+  font-size: 10px;
+  max-width: 70vw !important;
+}
+.maplibregl-ctrl-attrib a {
+  color: #5eead4 !important;
+}
+/* Attribution + logo sit at bottom-right by default (logo bottom-left); lift
+   both control containers above the bottom panel (~210 px tall). */
+.maplibregl-ctrl-bottom-right,
+.maplibregl-ctrl-bottom-left {
+  bottom: 212px !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-stop-active, .nav-pulse-ring { animation: none !important; }
+}
