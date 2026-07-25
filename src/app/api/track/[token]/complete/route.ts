@@ -30,18 +30,23 @@ export async function POST(
     // Update tracking link AND order status in a single transaction.
     // Note: TrackingLink.orderId stores the display orderId (e.g. "26048"),
     // not the database primary key, so we match on Order.orderId.
-    const [updated] = await db.$transaction([
-      db.trackingLink.update({
-        where: { token },
-        data: { completedAt: new Date() },
+    const completedAt = new Date();
+    await db.$transaction([
+      db.trackingLink.updateMany({
+        where: { token, userId: user.id },
+        data: { completedAt },
       }),
       db.order.updateMany({
-        where: { orderId: link.orderId, status: { in: ["CONFIRMED", "BOOKED", "SCHEDULED", "CONTACTED"] } },
+        where: {
+          orderId: link.orderId,
+          userId: user.id,
+          status: { in: ["CONFIRMED", "BOOKED", "SCHEDULED", "CONTACTED"] },
+        },
         data: { status: "COMPLETED" },
       }),
     ]);
 
-    return NextResponse.json({ ok: true, completedAt: updated.completedAt!.toISOString() });
+    return NextResponse.json({ ok: true, completedAt: completedAt.toISOString() });
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : "Unknown error";
     console.error("[track/complete] POST error:", msg);
@@ -76,12 +81,12 @@ export async function DELETE(
 
     // Revert tracking link AND order status in a single transaction.
     await db.$transaction([
-      db.trackingLink.update({
-        where: { token },
+      db.trackingLink.updateMany({
+        where: { token, userId: user.id },
         data: { completedAt: null },
       }),
       db.order.updateMany({
-        where: { orderId: link.orderId, status: "COMPLETED" },
+        where: { orderId: link.orderId, userId: user.id, status: "COMPLETED" },
         data: { status: "BOOKED" },
       }),
     ]);

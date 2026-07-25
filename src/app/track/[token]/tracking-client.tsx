@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { Shield, Truck, Navigation, Pin, CheckCircle2, Loader2, Clock, Info, Phone, MessageCircle, MapPin, X } from "lucide-react";
 import dynamic from "next/dynamic";
 import type { OptimizedRouteResult, VroomStopDetail, VroomLoadPlan } from "@/lib/vroom";
@@ -85,6 +85,7 @@ function convertTrackingToRoute(data: TrackingData): OptimizedRouteResult {
     durationSeconds: 0,
     distanceMeters: 0,
     loadPoints: 0,
+    alternative: { dropOff: "DROP_A" as const, distanceMeters: 0, durationSeconds: 0, dropOffArrival: 0, homeArrival: 0 },
   };
 
   return {
@@ -97,7 +98,9 @@ function convertTrackingToRoute(data: TrackingData): OptimizedRouteResult {
     totalPoints: 0,
     capacity: 20,
     unassigned: [],
-    source: "vroom",
+    source: "vroom" as const,
+    totalAlternativeDistanceMeters: 0,
+    totalAlternativeDurationSeconds: 0,
     summary: { cost: 0, routes: 1, unassigned: 0, duration: 0, distance: 0 },
   };
 }
@@ -127,6 +130,12 @@ export function TrackingClient({ token }: { token: string }) {
   const [toastTimer, setToastTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [followDriver, setFollowDriver] = useState(false);
   const [showAddress, setShowAddress] = useState(false);
+  const [mapStyle, setMapStyle] = useState<"dark" | "light">(() => {
+    if (typeof window !== "undefined") {
+      return (localStorage.getItem("sidekick-map-style") as "dark" | "light") || "dark";
+    }
+    return "dark";
+  });
 
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 5_000);
@@ -139,27 +148,44 @@ export function TrackingClient({ token }: { token: string }) {
     setToastTimer(setTimeout(() => setToast(null), 2300));
   }, [toastTimer]);
 
+  const requestSeq = useRef(0);
+  const inFlightRef = useRef<AbortController | null>(null);
   const fetchData = useCallback(async () => {
+    // Serialize polls: skip if the previous request is still in flight, and
+    // ignore stale responses so an older poll can never overwrite newer state.
+    if (inFlightRef.current) return;
+    const controller = new AbortController();
+    inFlightRef.current = controller;
+    const seq = ++requestSeq.current;
     try {
-      const res = await fetch(`/api/track/${token}`, { cache: "no-store" });
+      const res = await fetch(`/api/track/${token}`, { cache: "no-store", signal: controller.signal });
       const json = await res.json();
+      if (seq !== requestSeq.current) return;
       if (res.ok) {
         setData(json);
       } else {
         setData({ status: "completed", error: json.error || "Tracking link not found" });
       }
-    } catch {
-      setData({ status: "completed", error: "Failed to load tracking data" });
+    } catch (err) {
+      if ((err as Error)?.name === "AbortError") return;
+      if (seq === requestSeq.current) {
+        setData({ status: "completed", error: "Failed to load tracking data" });
+      }
     } finally {
-      setLoading(false);
+      if (seq === requestSeq.current) setLoading(false);
+      inFlightRef.current = null;
     }
   }, [token]);
 
   useEffect(() => {
     fetchData();
-    // Poll every 5 seconds for near-instant status/GPS updates
+    // Poll every 5 seconds; fetchData serializes in-flight requests itself.
     const interval = setInterval(fetchData, 5_000);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      requestSeq.current++; // invalidate any pending response
+      inFlightRef.current?.abort();
+    };
   }, [fetchData]);
 
   // Pre-fetch map tiles (fire-and-forget)
@@ -347,9 +373,11 @@ export function TrackingClient({ token }: { token: string }) {
                     etaInfo={data?.eta ?? null}
                     customRoutePath={data?.routePath ?? null}
                     followDriver={followDriver && state === "live"}
+                    mapStyle={mapStyle}
+                    onMapStyleChange={(s) => { setMapStyle(s); localStorage.setItem("sidekick-map-style", s); }}
                   />
                 ) : state === "completed" ? (
-                  <div className="flex h-full w-full flex-col items-center justify-center gap-3 p-6 text-center" style={{ background: "oklch(0.13 0.02 180)" }}>
+                  <div className="flex h-full w-full flex-col items-center justify-center gap-3 p-6 text-center" style={{ background: mapStyle === "light" ? "oklch(0.97 0 0)" : "oklch(0.13 0.02 180)" }}>
                     <div className="flex h-16 w-16 items-center justify-center rounded-full" style={{ background: "rgba(52,211,153,0.15)" }}>
                       <CheckCircle2 className="h-8 w-8" style={{ color: "var(--nc-primary)" }} />
                     </div>
@@ -361,12 +389,12 @@ export function TrackingClient({ token }: { token: string }) {
                     </div>
                   </div>
                 ) : state === "scheduled" ? (
-                  <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-4 text-center" style={{ background: "oklch(0.13 0.02 180)" }}>
+                  <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-4 text-center" style={{ background: mapStyle === "light" ? "oklch(0.97 0 0)" : "oklch(0.13 0.02 180)" }}>
                     <MapPin className="h-8 w-8" style={{ color: "var(--nc-muted)" }} />
                     <p className="text-xs" style={{ color: "var(--nc-muted)" }}>Live map will appear once the driver starts the route.</p>
                   </div>
                 ) : (
-                  <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-4 text-center" style={{ background: "oklch(0.13 0.02 180)" }}>
+                  <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-4 text-center" style={{ background: mapStyle === "light" ? "oklch(0.97 0 0)" : "oklch(0.13 0.02 180)" }}>
                     <Loader2 className="h-8 w-8 animate-spin text-emerald-400" />
                     <p className="text-xs text-muted-foreground">Loading map…</p>
                   </div>

@@ -3,15 +3,12 @@ import { promises as fs } from "fs";
 import path from "path";
 import { requireAuth } from "@/lib/session";
 
-// POST /api/tile/prefetch — Pre-warm the tile cache for a bounding box at
-// multiple zoom levels. Called after route optimization so that when the user
-// zooms/pan the 3D map, tiles are served from disk/memory cache instantly
-// instead of fetching from Esri's servers (200-500ms per tile).
+// POST /api/tile/prefetch — Pre-warm the tile cache for a bounding box.
 //
-// Body: { minLat, maxLat, minLon, maxLon, zoomLevels?: number[] }
-// Default zoom levels: [10, 13, 14, 15, 16, 17]
+// Body: { minLat, maxLat, minLon, maxLon, zoomLevels?: number[], style?: "dark"|"light" }
 
-const UPSTREAM = "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png";
+const UPSTREAM_DARK = "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png";
+const UPSTREAM_LIGHT = "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png";
 const TILE_CACHE_DIR = path.join(process.cwd(), "tile-cache");
 
 function lonToTileX(lon: number, z: number) {
@@ -25,17 +22,20 @@ function latToTileY(lat: number, z: number) {
   );
 }
 
-async function fetchAndCache(z: number, x: number, y: number): Promise<boolean> {
-  // Check disk first
-  const fp = path.join(TILE_CACHE_DIR, String(z), String(x), `${y}.png`);
+async function fetchAndCache(style: string, upstream: string, z: number, x: number, y: number): Promise<boolean> {
+  const fp = path.join(TILE_CACHE_DIR, style, String(z), String(x), `${y}.png`);
   try {
     await fs.access(fp);
-    return true; // already cached
+    return true;
   } catch {
-    // not cached — fetch from Esri
+    // Legacy fallback for dark tiles
+    if (style === "dark") {
+      const oldFp = path.join(TILE_CACHE_DIR, String(z), String(x), `${y}.png`);
+      try { await fs.access(oldFp); return true; } catch {}
+    }
   }
 
-  const url = UPSTREAM.replace("{z}", String(z)).replace("{x}", String(x)).replace("{y}", String(y));
+  const url = upstream.replace("{z}", String(z)).replace("{x}", String(x)).replace("{y}", String(y));
   try {
     const res = await fetch(url, {
       headers: { "User-Agent": "HERO-Sidekick/1.0 (route planner tile proxy)" },
@@ -43,7 +43,7 @@ async function fetchAndCache(z: number, x: number, y: number): Promise<boolean> 
     });
     if (!res.ok) return false;
     const buf = Buffer.from(await res.arrayBuffer());
-    const dir = path.join(TILE_CACHE_DIR, String(z), String(x));
+    const dir = path.join(TILE_CACHE_DIR, style, String(z), String(x));
     await fs.mkdir(dir, { recursive: true });
     await fs.writeFile(path.join(dir, `${y}.png`), buf);
     return true;
@@ -60,16 +60,43 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json().catch(() => null);
-  if (!body || typeof body.minLat !== "number") {
-    return NextResponse.json({ error: "missing bbox" }, { status: 400 });
-  }
-
-  const { minLat, maxLat, minLon, maxLon } = body;
-  // Validate bbox ranges
-  if (minLat < -90 || maxLat > 90 || minLon < -180 || maxLon > 180) {
+  const { minLat, maxLat, minLon, maxLon, style } = body || {};
+  const nums = [minLat, maxLat, minLon, maxLon];
+  if (
+    !body ||
+    !nums.every((n) => typeof n === "number" && Number.isFinite(n)) ||
+    minLat < -90 || maxLat > 90 || minLat >= maxLat ||
+    minLon < -180 || maxLon > 180 || minLon >= maxLon
+  ) {
     return NextResponse.json({ error: "invalid bbox" }, { status: 400 });
   }
-  const zoomLevels: number[] = body.zoomLevels || [10, 13, 14, 15, 16, 17];
+  const mapStyle = style === "light" ? "light" : "dark";
+  const upstream = mapStyle === "light" ? UPSTREAM_LIGHT : UPSTREAM_DARK;
+
+  const rawZoom: unknown = body.zoomLevels ?? [10, 13, 14, 15, 16, 17];
+  if (!Array.isArray(rawZoom) || rawZoom.length === 0 || rawZoom.length > 8) {
+    return NextResponse.json({ error: "invalid zoomLevels" }, { status: 400 });
+  }
+  const zoomLevels = [...new Set(rawZoom)].filter(
+    (z): z is number => Number.isInteger(z) && (z as number) >= 8 && (z as number) <= 17
+  );
+  if (zoomLevels.length !== rawZoom.length) {
+    return NextResponse.json({ error: "zoom levels must be integers between 8 and 17" }, { status: 400 });
+  }
+
+  // Hard cap total tiles across the whole request (resource-exhaustion guard).
+  let totalTiles = 0;
+  for (const z of zoomLevels) {
+    const tX = lonToTileX(maxLon, z) - lonToTileX(minLon, z) + 1;
+    const tY = latToTileY(minLat, z) - latToTileY(maxLat, z) + 1;
+    if (tX * tY > 200) {
+      return NextResponse.json({ error: `bbox too large at zoom ${z} (max 200 tiles per level)` }, { status: 400 });
+    }
+    totalTiles += tX * tY;
+  }
+  if (totalTiles > 500) {
+    return NextResponse.json({ error: `total tile count ${totalTiles} exceeds limit of 500` }, { status: 400 });
+  }
 
   let fetched = 0;
   let cached = 0;
@@ -99,7 +126,7 @@ export async function POST(request: NextRequest) {
     for (let i = 0; i < tiles.length; i += 4) {
       const batch = tiles.slice(i, i + 4);
       const results = await Promise.all(
-        batch.map((t) => fetchAndCache(z, t.x, t.y))
+        batch.map((t) => fetchAndCache(mapStyle, upstream, z, t.x, t.y))
       );
       for (const r of results) {
         if (r) cached++;
@@ -111,6 +138,7 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({
     ok: true,
+    style: mapStyle,
     fetched,
     cached,
     failed,

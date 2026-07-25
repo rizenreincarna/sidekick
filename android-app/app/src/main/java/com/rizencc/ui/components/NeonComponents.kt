@@ -7,6 +7,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.runtime.remember
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -642,12 +643,12 @@ fun PulseAnimation(
         initialValue = 1f, targetValue = 1.18f,
         animationSpec = infiniteRepeatable(tween(700, easing = FastOutSlowInEasing), RepeatMode.Reverse),
         label = "pulse-scale"
-    ) ?: androidx.compose.runtime.mutableFloatStateOf(1f)
+    ) ?: remember { androidx.compose.runtime.mutableFloatStateOf(1f) }
     val alpha by transition?.animateFloat(
         initialValue = 0.8f, targetValue = 0.3f,
         animationSpec = infiniteRepeatable(tween(700, easing = FastOutSlowInEasing), RepeatMode.Reverse),
         label = "pulse-alpha"
-    ) ?: androidx.compose.runtime.mutableFloatStateOf(1f)
+    ) ?: remember { androidx.compose.runtime.mutableFloatStateOf(1f) }
     content(scale, alpha)
 }
 

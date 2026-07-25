@@ -33,6 +33,7 @@ interface AiConversationItem {
 }
 
 interface AiActionItem {
+  conversationId: string;
   id: string;
   actionType: string;
   description: string;

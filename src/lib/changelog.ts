@@ -1,5 +1,22 @@
 export const CHANGELOG = [
   {
+    version: "v1.28",
+    date: "25 Jul 2026",
+    title: "Light/Dark Map Toggle",
+    highlights: [
+      "Sun/Moon toggle on every map — route planner, navigation, and customer tracking pages",
+      "Light mode uses CARTO light tiles (clean, bright, easier to read in sunlight)",
+      "Dark mode uses CARTO dark tiles (default, battery-friendly, cockpit look)",
+      "Preference saved across pages via localStorage — your choice sticks",
+      "Toggle button placed next to the lock button (top-right) — never blocks the map or UI",
+    ],
+    changes: [
+      "Tile proxy API supports ?style=light for CARTO light_all tiles",
+      "Backgrounds adapt to selected style on all map surfaces",
+      "Navigation map switches tile source via MapLibre setStyle()",
+    ],
+  },
+  {
     version: "v1.27",
     date: "24 Jul 2026",
     title: "Smart Drop-Point Selection & Route Editor",

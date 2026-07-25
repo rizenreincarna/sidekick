@@ -16,11 +16,13 @@
 import { useEffect, useRef } from "react";
 import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+import { Sun, Moon } from "lucide-react";
 import {
   bearingAlongPath,
   lerpBearing,
   lerpLatLng,
   pointAlongPath,
+  haversineMeters,
   type LatLng,
   type PathPoint,
 } from "@/lib/geo-utils";
@@ -43,19 +45,16 @@ const ROUTE_COLOR = "#67e8f9"; // cyan-300 — bright high-contrast on the dark 
 const ROUTE_CASING = "#155e75"; // cyan-900 casing for edge definition
 const ROUTE_PASSED = "rgba(15, 23, 42, 0.85)";
 
-function fallbackRasterStyle(): maplibregl.StyleSpecification {
-  // Use the app's own dark-tile proxy (CARTO dark_matter, OSM-based, disk+memory
-  // cached) as the default basemap. This gives a true dark cockpit look WITHOUT
-  // a canvas filter, so the teal route line renders crisp and visible.
+function buildRasterStyle(mapStyle: "dark" | "light"): maplibregl.StyleSpecification {
   const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const styleParam = mapStyle === "light" ? "?style=light" : "";
   return {
     version: 8,
     sources: {
       sidekick: {
         type: "raster",
-        tiles: [`${origin}/api/tile/{z}/{x}/{y}.png`],
+        tiles: [`${origin}/api/tile/{z}/{x}/{y}.png${styleParam}`],
         tileSize: 256,
-        // OSM via CARTO dark_matter — required attribution.
         attribution: "© OpenStreetMap contributors © CARTO",
       },
     },
@@ -79,8 +78,9 @@ export interface NavigationMapProps {
   onFollowChange: (follow: boolean) => void;
   /** Increment to trigger a fit-bounds overview. */
   overviewRequest: number;
-  /** Initial map center when no GPS yet. */
   initialCenter: LatLng;
+  mapStyle?: "dark" | "light";
+  onMapStyleChange?: (style: "dark" | "light") => void;
 }
 
 export default function NavigationMapMaplibre({
@@ -94,6 +94,8 @@ export default function NavigationMapMaplibre({
   onFollowChange,
   overviewRequest,
   initialCenter,
+  mapStyle = "dark",
+  onMapStyleChange,
 }: NavigationMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -112,6 +114,7 @@ export default function NavigationMapMaplibre({
   // SVG overlay route line: avoids MapLibre v6 GeoJSON worker deadlocks.
   const routeSvgRef = useRef<SVGPolylineElement | null>(null);
   const routePathRef = useRef<PathPoint[]>([]);
+  const passedSvgRef = useRef<SVGPolylineElement | null>(null);
 
   followRef.current = follow;
   legRef.current = leg;
@@ -125,7 +128,7 @@ export default function NavigationMapMaplibre({
 
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: MAP_STYLE_URL || fallbackRasterStyle(),
+      style: MAP_STYLE_URL || buildRasterStyle(mapStyle),
       center: [initialCenter.lng, initialCenter.lat],
       zoom: 15,
       pitch: 0,
@@ -148,7 +151,7 @@ export default function NavigationMapMaplibre({
       }
       if (!styleLoaded && MAP_STYLE_URL) {
         try {
-          map.setStyle(fallbackRasterStyle());
+          map.setStyle(buildRasterStyle(mapStyle));
         } catch {
           /* ignore */
         }
@@ -189,8 +192,17 @@ export default function NavigationMapMaplibre({
     polyline.setAttribute("stroke-linecap", "round");
     polyline.setAttribute("stroke-linejoin", "round");
     svg.appendChild(polyline);
+    // Passed-segment overlay — drawn on top of main line to dim traversed portion
+    const passedPolyline = document.createElementNS(svgNs, "polyline");
+    passedPolyline.setAttribute("fill", "none");
+    passedPolyline.setAttribute("stroke", ROUTE_PASSED);
+    passedPolyline.setAttribute("stroke-width", "8");
+    passedPolyline.setAttribute("stroke-linecap", "round");
+    passedPolyline.setAttribute("stroke-linejoin", "round");
+    svg.appendChild(passedPolyline);
     if (mount) mount.appendChild(svg);
     routeSvgRef.current = polyline;
+    passedSvgRef.current = passedPolyline;
 
     const updateOverlay = () => updateRouteOverlay(map, routeSvgRef.current, routePathRef.current);
     map.on("move", updateOverlay);
@@ -205,10 +217,18 @@ export default function NavigationMapMaplibre({
       vehicleRef.current = null;
       vehicleElRef.current = null;
       routeSvgRef.current = null;
+      passedSvgRef.current = null;
       delete (window as unknown as { __navMap?: maplibregl.Map }).__navMap;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Switch tile source when mapStyle changes (setStyle triggers full reload)
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || MAP_STYLE_URL) return;
+    try { map.setStyle(buildRasterStyle(mapStyle)); } catch {}
+  }, [mapStyle]);
 
   // Re-attempt 3D buildings + re-sync route layers after style (re)loads.
   // Covers: leg arriving before the style finished loading, and style swaps
@@ -233,14 +253,7 @@ export default function NavigationMapMaplibre({
       ensureRouteLayers(map);
       updateRouteOverlay(map, routeSvgRef.current, routePathRef.current);
       lastPassedUpdateRef.current = -Infinity; // force passed-segment refresh
-      syncPassedSource(map, legRef.current, progressRef.current, lastPassedUpdateRef);
-      // Debug: the main route line is SVG; only passed-segment layer exists here.
-      try {
-        const feats = map.queryRenderedFeatures(undefined, { layers: ["nav-route-passed-line"] });
-        document.documentElement.setAttribute("data-nav-rendered-features", String(feats.length));
-      } catch (e) {
-        document.documentElement.setAttribute("data-nav-rendered-features", "err:" + e);
-      }
+      updatePassedOverlay(map, passedSvgRef.current, routePathRef.current, progressRef.current, lastPassedUpdateRef);
     };
     map.on("styledata", onStyleData);
     // Trigger once immediately if the style is already loaded.
@@ -262,11 +275,11 @@ export default function NavigationMapMaplibre({
     updateRouteOverlay(map, routeSvgRef.current, routePathRef.current);
   }, [leg]);
 
-  // Passed segment — throttled to meaningful progress changes
+  // Passed segment — SVG overlay (renders ABOVE main route line, dimming it)
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    syncPassedSource(map, leg, progressMeters, lastPassedUpdateRef);
+    updatePassedOverlay(map, passedSvgRef.current, routePathRef.current, progressMeters, lastPassedUpdateRef);
   }, [leg, progressMeters]);
 
   // -------------------------------------------------------------------------
@@ -414,47 +427,77 @@ export default function NavigationMapMaplibre({
   }, []);
 
   return (
-    <div
-      ref={containerRef}
-      // Inline position/size beats MapLibre's `.maplibregl-map { position: relative }`
-      // stylesheet rule, which would otherwise collapse the container to 0-height.
-      style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
-      className={MAP_DARK_FILTER ? "nav-map-dark" : undefined}
-      aria-label="Navigation map"
-    />
+    <div style={{ position: "absolute", inset: 0 }}>
+      <div
+        ref={containerRef}
+        style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
+        className={MAP_DARK_FILTER ? "nav-map-dark" : undefined}
+        aria-label="Navigation map"
+      />
+      {onMapStyleChange && (
+        <button
+          onClick={() => onMapStyleChange(mapStyle === "dark" ? "light" : "dark")}
+          className="absolute right-3 top-3 z-20 flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-background/80 text-muted-foreground shadow-lg backdrop-blur-md transition-colors hover:bg-white/10 hover:text-foreground"
+          title={mapStyle === "dark" ? "Switch to light map" : "Switch to dark map"}
+          aria-label={mapStyle === "dark" ? "Switch to light map" : "Switch to dark map"}
+        >
+          {mapStyle === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+        </button>
+      )}
+    </div>
   );
 }
 
 // ---------------------------------------------------------------------------
 // Route sources/layers — idempotent helpers (safe to call on every styledata)
 // ---------------------------------------------------------------------------
-function ensureRouteLayers(map: maplibregl.Map) {
-  try {
-    // Passed-segment source + layer
-    if (!map.getSource("nav-route-passed")) {
-      map.addSource("nav-route-passed", {
-        type: "geojson",
-        data: { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: [] } },
-      });
-    }
-    if (!map.getLayer("nav-route-passed-line")) {
-      map.addLayer({
-        id: "nav-route-passed-line",
-        type: "line",
-        source: "nav-route-passed",
-        layout: { "line-cap": "round", "line-join": "round" },
-        paint: { "line-color": ROUTE_PASSED, "line-width": 8, "line-opacity": 0.9 },
-      });
-    }
+function ensureRouteLayers(_map: maplibregl.Map) {
+  // Route and passed segment are SVG overlays — no MapLibre layers needed.
+}
 
-    // Debug hook - confirms the passed-segment layer exists on the live map.
-    // The main route line is rendered via the SVG overlay, not MapLibre layers.
-    const root = document.documentElement;
-    root.setAttribute("data-nav-source", "0");
-    root.setAttribute("data-nav-layer", map.getLayer("nav-route-passed-line") ? "1" : "0");
-  } catch (e) {
-    document.documentElement.setAttribute("data-nav-ensure-error", String(e));
+function updatePassedOverlay(
+  map: maplibregl.Map,
+  polyline: SVGPolylineElement | null,
+  path: PathPoint[],
+  progressMeters: number,
+  lastUpdateRef: React.MutableRefObject<number>
+) {
+  if (!polyline) return;
+  if (path.length < 2) {
+    polyline.setAttribute("points", "");
+    return;
   }
+  // Throttle to meaningful progress changes
+  if (Math.abs(progressMeters - lastUpdateRef.current) < 15) return;
+  lastUpdateRef.current = progressMeters;
+
+  // Build cumulative distances for the path
+  const cum: number[] = [0];
+  for (let i = 1; i < path.length; i++) {
+    cum.push(cum[i - 1] + haversineMeters(
+      { lat: path[i - 1][0], lng: path[i - 1][1] },
+      { lat: path[i][0], lng: path[i][1] }
+    ));
+  }
+
+  // Find split point at progressMeters
+  let idx = 0;
+  while (idx < cum.length - 1 && cum[idx + 1] < progressMeters) idx++;
+  const passedPath = path.slice(0, idx + 1);
+  const snap = pointAlongPath(path, cum, progressMeters);
+  passedPath.push([snap.lat, snap.lng]);
+
+  // Project to screen coordinates (same logic as updateRouteOverlay)
+  const w = map.getCanvas().clientWidth;
+  const h = map.getCanvas().clientHeight;
+  const pts: string[] = [];
+  for (const [lat, lng] of passedPath) {
+    const p = map.project([lng, lat]);
+    if (p.x > -100 && p.x < w + 100 && p.y > -100 && p.y < h + 100) {
+      pts.push(`${p.x.toFixed(1)},${p.y.toFixed(1)}`);
+    }
+  }
+  polyline.setAttribute("points", pts.join(" "));
 }
 
 function syncRouteSource(map: maplibregl.Map, leg: NavLeg | null) {
@@ -494,35 +537,6 @@ function updateRouteOverlay(
   const p = map.project([lng, lat]);
   pts.push(`${p.x.toFixed(1)},${p.y.toFixed(1)}`);
   polyline.setAttribute("points", pts.join(" "));
-}
-
-function syncPassedSource(
-  map: maplibregl.Map,
-  leg: NavLeg | null,
-  progressMeters: number,
-  lastUpdateRef: React.MutableRefObject<number>
-) {
-  const src = map.getSource("nav-route-passed") as maplibregl.GeoJSONSource | undefined;
-  if (!src) return;
-  if (!leg || leg.offline || leg.path.length < 2) {
-    src.setData({ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: [] } });
-    return;
-  }
-  if (Math.abs(progressMeters - lastUpdateRef.current) < 15) return;
-  lastUpdateRef.current = progressMeters;
-
-  // Split the path at progressMeters
-  const cum = leg.cumDistances;
-  let idx = 0;
-  while (idx < cum.length - 1 && cum[idx + 1] < progressMeters) idx++;
-  const passed: PathPoint[] = leg.path.slice(0, idx + 1);
-  const snap = pointAlongPath(leg.path, cum, progressMeters);
-  passed.push([snap.lat, snap.lng]);
-  src.setData({
-    type: "Feature",
-    properties: {},
-    geometry: { type: "LineString", coordinates: passed.map(([lat, lng]) => [lng, lat]) },
-  });
 }
 
 // ---------------------------------------------------------------------------

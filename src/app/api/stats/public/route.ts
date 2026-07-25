@@ -6,11 +6,20 @@ import { NextRequest, NextResponse } from "next/server";
 const statsCache = new Map<string, { data: unknown; ts: number }>();
 const STATS_CACHE_TTL = 5000;
 
-// GET /api/stats/public — No NextAuth required.
-// Protected by Nginx auth_basic on work.rizen.space instead.
+// GET /api/stats/public — protected by a shared internal token.
+// Nginx at work.rizen.space injects X-Internal-Stats-Token from a private location
+// config; direct backend access without the token is rejected in-app.
 // Returns the same dashboard stats as /api/stats but for the single operator user.
 export async function GET(request: NextRequest) {
   try {
+    const expected = process.env.INTERNAL_STATS_TOKEN;
+    if (!expected) {
+      return NextResponse.json({ error: "Stats endpoint not configured" }, { status: 503 });
+    }
+    const provided = request.headers.get("x-internal-stats-token");
+    if (!provided || provided !== expected) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     const { searchParams } = new URL(request.url);
     const range = searchParams.get("range") || "week";
 

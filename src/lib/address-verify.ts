@@ -198,7 +198,7 @@ export async function verifyAddress(
   let ai: Partial<AddressVerificationResult> = {};
   if (await isAiEnabled()) {
     try {
-      ai = await analyzeWithAi(address, city, geoOk, geoNote, customerName, geoTypes, isCommercialFromGoogle, isResidentialFromGoogle);
+      ai = await analyzeWithAi(address, city, geoOk, geoNote, geoTypes, isCommercialFromGoogle, isResidentialFromGoogle, customerName);
     } catch (error) {
       console.error("[address-verify] AI analysis error:", error);
     }
@@ -226,10 +226,10 @@ async function analyzeWithAi(
   city: string,
   geoOk: boolean,
   geoNote: string,
-  customerName?: string,
   geoTypes: string[],
   isCommercialFromGoogle: boolean,
-  isResidentialFromGoogle: boolean
+  isResidentialFromGoogle: boolean,
+  customerName?: string
 ): Promise<AddressVerificationResult> {
   // Pre-filter: if the address text clearly indicates a residential building,
   // skip the AI call for office detection entirely — saves cost and avoids misclassification.

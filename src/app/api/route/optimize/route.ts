@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAuth } from "@/lib/session";
-import { optimizeRouteForDate, type VroomOrderInput } from "@/lib/vroom";
+import { logAudit } from "@/lib/audit";
+import { optimizeRouteForDate, recomputeLoadDropOff, recalculateRouteTotals, type VroomOrderInput } from "@/lib/vroom";
 import { FIXED_LOCATIONS } from "@/lib/route-model";
 
 // POST /api/route/optimize — Takes { date }, fetches geocoded orders for that
 // date, builds a VROOM problem, calls VROOM (with nearest-neighbour fallback),
 // and returns the optimized route (NOT yet persisted).
+// Optional body.forceDropOffs: ("DROP_A" | "DROP_B")[] per load overrides the
+// shortest-route choice while preserving VROOM pickup order.
 export async function POST(request: NextRequest) {
   const user = await requireAuth();
   if (!user)
@@ -24,6 +27,24 @@ export async function POST(request: NextRequest) {
     // Support/Admin may pass userId to optimize another hero's route
     const isPrivileged = user.role === "ADMIN" || user.role === "SUPPORT";
     const targetUserId = isPrivileged && body.userId ? String(body.userId) : user.id;
+
+    // Cross-user access: validate the target user exists and leave an audit trail
+    if (targetUserId !== user.id) {
+      const target = await db.user.findUnique({
+        where: { id: targetUserId },
+        select: { id: true },
+      });
+      if (!target) {
+        return NextResponse.json({ error: "Target user not found." }, { status: 404 });
+      }
+      await logAudit({
+        userId: user.id,
+        action: "ROUTE_OPTIMIZE_CROSS_USER",
+        entity: "Route",
+        entityId: `${targetUserId}:${date}`,
+        details: `${user.role} ${user.username} optimized route for user ${targetUserId}`,
+      });
+    }
 
     const orders = await db.order.findMany({
       where: {
@@ -85,7 +106,24 @@ export async function POST(request: NextRequest) {
       };
     }
 
-    const result = await optimizeRouteForDate(inputs, date, homeOverride);
+    let result = await optimizeRouteForDate(inputs, date, homeOverride);
+
+    // Apply per-load drop-point overrides requested by the user.
+    const forceDropOffs = body.forceDropOffs as ("DROP_A" | "DROP_B" | undefined)[] | undefined;
+    if (Array.isArray(forceDropOffs) && forceDropOffs.length > 0) {
+      let changed = false;
+      for (let i = 0; i < result.loads.length; i++) {
+        const forced = forceDropOffs[i];
+        if (forced && (forced === "DROP_A" || forced === "DROP_B") && result.loads[i].dropOff !== forced) {
+          result.loads[i] = recomputeLoadDropOff(result.loads[i], forced, homeOverride);
+          changed = true;
+        }
+      }
+      if (changed) {
+        result = recalculateRouteTotals(result);
+      }
+    }
+
     return NextResponse.json({ success: true, route: result });
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : "Unknown error";

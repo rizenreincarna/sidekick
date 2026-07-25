@@ -19,7 +19,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { FIXED_LOCATIONS, VEHICLE } from "@/lib/route-model";
 import { fmtMalaysiaTime } from "@/lib/vroom";
 import type { OptimizedRouteResult, VroomStopDetail } from "@/lib/vroom";
-import { Navigation, X, Phone, MapPin, Home as HomeIcon, Clock, Package, Lock, Unlock, CheckCircle2 } from "lucide-react";
+import { Navigation, X, Phone, MapPin, Home as HomeIcon, Clock, Package, Lock, Unlock, CheckCircle2, Sun, Moon } from "lucide-react";
 import { getTimeOfDay, fetchWeather, createAmbientLife, type AmbientSystem, type TimeOfDayConfig, type WeatherInfo } from "@/lib/map-ambient";
 
 // ---------------------------------------------------------------------------
@@ -137,7 +137,7 @@ interface Props {
   onSelectStop?: (stop: VroomStopDetail) => void;
   selectedOrderId?: string | null;
   heroProfile?: { heroName: string; plateNumber: string; vehicleColor: string; vehicleModel: string; homeLatitude?: number | null; homeLongitude?: number | null } | null;
-  driverPosition?: { latitude: number; longitude: number } | null;
+  driverPosition?: { latitude: number; longitude: number; heading?: number | null } | null;
   routeStatus?: string;
   trackingTokens?: Record<string, { token: string; completed: boolean }>;
   variant?: "planner" | "tracking";
@@ -145,6 +145,8 @@ interface Props {
   etaInfo?: { minutes: number; distanceKm: number; stopsBefore: number } | null;
   customRoutePath?: [number, number][] | null;
   followDriver?: boolean;
+  mapStyle?: "dark" | "light";
+  onMapStyleChange?: (style: "dark" | "light") => void;
 }
 
 // Escape user-supplied text before inserting into innerHTML (prevent XSS)
@@ -152,7 +154,7 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-export default function RouteMap3D({ route, onSelectStop, selectedOrderId, heroProfile, driverPosition, routeStatus, trackingTokens, variant = "planner", customerOrderId, etaInfo, customRoutePath, followDriver }: Props) {
+export default function RouteMap3D({ route, onSelectStop, selectedOrderId, heroProfile, driverPosition, routeStatus, trackingTokens, variant = "planner", customerOrderId, etaInfo, customRoutePath, followDriver, mapStyle = "dark", onMapStyleChange }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const labelsRef = useRef<HTMLDivElement>(null);
   const onSelectRef = useRef(onSelectStop);
@@ -168,6 +170,7 @@ export default function RouteMap3D({ route, onSelectStop, selectedOrderId, heroP
   const controlsRef = useRef<OrbitControls | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const driverPosRef = useRef<{ latitude: number; longitude: number } | null>(null);
+  const driverHeadingRef = useRef<number | null>(null);
   const followDriverRef = useRef(false);
   const routeStatusRef = useRef<string | undefined>(undefined);
   const trackingTokensRef = useRef<Record<string, { token: string; completed: boolean }> | undefined>(undefined);
@@ -179,6 +182,7 @@ export default function RouteMap3D({ route, onSelectStop, selectedOrderId, heroP
   routeRef.current = route;
   lockedRef.current = locked;
   driverPosRef.current = driverPosition ?? null;
+  driverHeadingRef.current = driverPosition?.heading ?? null;
   followDriverRef.current = !!followDriver;
   routeStatusRef.current = routeStatus;
   trackingTokensRef.current = trackingTokens;
@@ -198,10 +202,7 @@ export default function RouteMap3D({ route, onSelectStop, selectedOrderId, heroP
 
   const selectedInfo = useMemo(() => {
     if (!selectedOrderId) return null;
-    for (const { stop, num, loadIdx } of allStops) {
-      if (stop.orderId === selectedOrderId) return { stop, num, loadIdx };
-    }
-    return null;
+    return allStops.find(({ stop }) => stop.orderId === selectedOrderId) ?? null;
   }, [allStops, selectedOrderId]);
 
   const stats = useMemo(() => {
@@ -353,7 +354,8 @@ export default function RouteMap3D({ route, onSelectStop, selectedOrderId, heroP
     function createTilePlane(
       bbox: { minLat: number; maxLat: number; minLon: number; maxLon: number },
       zoom: number,
-      yOffset: number
+      yOffset: number,
+      style: "dark" | "light"
     ): { center: THREE.Vector3; width: number; depth: number } {
       let tz = zoom;
       let tx0 = Math.floor(lonToTileX(bbox.minLon, tz));
@@ -377,7 +379,7 @@ export default function RouteMap3D({ route, onSelectStop, selectedOrderId, heroP
       canvas.width = tX * TILE;
       canvas.height = tY * TILE;
       const ctx = canvas.getContext("2d")!;
-      ctx.fillStyle = "#1a1a2e";
+      ctx.fillStyle = style === "light" ? "#f0f0f0" : "#1a1a2e";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       const tex = new THREE.CanvasTexture(canvas);
       tex.colorSpace = THREE.SRGBColorSpace;
@@ -415,14 +417,14 @@ export default function RouteMap3D({ route, onSelectStop, selectedOrderId, heroP
             tex.needsUpdate = true;
           };
           img.onerror = () => {};
-          img.src = `/api/tile/${tz}/${tx}/${ty}.png?v=carto2`;
+          img.src = `/api/tile/${tz}/${tx}/${ty}.png?style=${style}`;
         }
       }
       return { center: pc, width: pw, depth: ph };
     }
 
     // ---- Background layer: covers all of Selangor + KL at z=10 ----
-    const bgPlane = createTilePlane(SELANGOR_KL_BBOX, 10, 0);
+    const bgPlane = createTilePlane(SELANGOR_KL_BBOX, 10, 0, mapStyle);
 
     // ---- Dynamic detail tile layer ----
     // Loads tiles at a zoom level matching the camera's current view distance.
@@ -433,7 +435,7 @@ export default function RouteMap3D({ route, onSelectStop, selectedOrderId, heroP
     detailCanvas.width = 256;
     detailCanvas.height = 256;
     const detailCtx = detailCanvas.getContext("2d")!;
-    detailCtx.fillStyle = "#1a1a2e";
+    detailCtx.fillStyle = mapStyle === "light" ? "#f0f0f0" : "#1a1a2e";
     detailCtx.fillRect(0, 0, 256, 256);
     const detailTex = new THREE.CanvasTexture(detailCanvas);
     detailTex.colorSpace = THREE.SRGBColorSpace;
@@ -547,7 +549,7 @@ export default function RouteMap3D({ route, onSelectStop, selectedOrderId, heroP
             detailTexDirty = true; // batch: update texture once per frame
           };
           img.onerror = () => {};
-          img.src = `/api/tile/${zoom}/${tx}/${ty}.png?v=carto2`;
+          img.src = `/api/tile/${zoom}/${tx}/${ty}.png?style=${mapStyle}`;
         }
       }
       detailTexDirty = true;
@@ -760,9 +762,12 @@ export default function RouteMap3D({ route, onSelectStop, selectedOrderId, heroP
     // ---- Route paths (animated draw) ----
     // In tracking variant, use customRoutePath (driver → stops → customer) if available
     interface PathInfo {
-      line: THREE.Line;
+      line: THREE.Object3D;
       points: THREE.Vector3[];
-      glow: THREE.Line;
+      glow: THREE.Object3D;
+      passedLine: THREE.Line;
+      passedGlow: THREE.Line;
+      animated: boolean;
     }
     const paths: PathInfo[] = [];
     const loadColors = [0x38bdf8, 0xf472b6, 0xa3e635, 0xfbbf24, 0x67e8f9];
@@ -795,7 +800,19 @@ export default function RouteMap3D({ route, onSelectStop, selectedOrderId, heroP
       scene.add(glowTube);
 
       disposables.push(tubeGeo, tubeMat, glowGeo, glowMat);
-      paths.push({ line: tube as unknown as THREE.Line, points: pts, glow: glowTube as unknown as THREE.Line });
+      // Keep TubeGeometry immutable; only the lightweight passed overlays change per frame.
+      const passedGeo = new THREE.BufferGeometry();
+      const passedMat = new THREE.LineBasicMaterial({ color: 0x1a1a2e, transparent: true, opacity: 0.7 });
+      const passedLine = new THREE.Line(passedGeo, passedMat);
+      passedLine.position.y = span * 0.007;
+      scene.add(passedLine);
+      const passedGlowGeo = new THREE.BufferGeometry();
+      const passedGlowMat = new THREE.LineBasicMaterial({ color: 0x1a1a2e, transparent: true, opacity: 0.5 });
+      const passedGlow = new THREE.Line(passedGlowGeo, passedGlowMat);
+      passedGlow.position.y = span * 0.005;
+      scene.add(passedGlow);
+      disposables.push(passedGeo, passedMat, passedGlowGeo, passedGlowMat);
+      paths.push({ line: tube, points: pts, glow: glowTube, passedLine, passedGlow, animated: false });
     } else if (!isTracking) {
     route.loads.forEach((load, li) => {
       const pts: THREE.Vector3[] = [];
@@ -824,21 +841,47 @@ export default function RouteMap3D({ route, onSelectStop, selectedOrderId, heroP
       scene.add(glow);
       disposables.push(geo, mat, glowMat, glow.geometry);
 
-      paths.push({ line, points: pts, glow });
+      // Passed overlay: dark line + dark glow rendered on top
+      const passedGeo = new THREE.BufferGeometry().setFromPoints(pts);
+      const passedMat = new THREE.LineBasicMaterial({ color: 0x1a1a2e, linewidth: 2, transparent: true, opacity: 0.5 });
+      const passedLine = new THREE.Line(passedGeo, passedMat);
+      passedLine.position.y = span * 0.007;
+      scene.add(passedLine);
+      const passedGlowMat = new THREE.LineBasicMaterial({ color: 0x1a1a2e, transparent: true, opacity: 0.4 });
+      const passedGlow = new THREE.Line(passedGeo.clone(), passedGlowMat);
+      passedGlow.position.y = span * 0.005;
+      scene.add(passedGlow);
+      disposables.push(passedGeo, passedMat, passedGlowMat, passedGlow.geometry);
+
+      paths.push({ line, points: pts, glow, passedLine, passedGlow, animated: true });
     });
     } // end else (planner path building)
 
-    // ---- Animated vehicle dot (follows first load) ----
+    // ---- Animated vehicle dot with heading arrow ----
+    const vehicleGroup = new THREE.Group();
+    vehicleGroup.position.y = span * 0.03;
     const vehicleGeo = new THREE.SphereGeometry(span * 0.009, 12, 12);
     const vehicleMat = new THREE.MeshStandardMaterial({
       color: 0xfde047,
       emissive: 0xfacc15,
       emissiveIntensity: 0.8,
     });
-    const vehicle = new THREE.Mesh(vehicleGeo, vehicleMat);
-    vehicle.position.y = span * 0.03;
-    scene.add(vehicle);
-    disposables.push(vehicleGeo, vehicleMat);
+    const vehicleOrb = new THREE.Mesh(vehicleGeo, vehicleMat);
+    vehicleGroup.add(vehicleOrb);
+    // Directional arrow cone
+    const arrowGeo = new THREE.ConeGeometry(span * 0.006, span * 0.018, 4);
+    const arrowMat = new THREE.MeshStandardMaterial({
+      color: 0xfde047,
+      emissive: 0xfacc15,
+      emissiveIntensity: 0.6,
+    });
+    const arrow = new THREE.Mesh(arrowGeo, arrowMat);
+    arrow.position.z = span * 0.012; // in front of the orb
+    arrow.rotation.x = Math.PI / 2; // point forward (cone tip along +Z)
+    vehicleGroup.add(arrow);
+    scene.add(vehicleGroup);
+    disposables.push(vehicleGeo, vehicleMat, arrowGeo, arrowMat);
+    const vehicle = vehicleGroup;
 
     // Vertical beam shooting to the sky from the vehicle position
     const beamHeight = span * 0.15;
@@ -849,7 +892,7 @@ export default function RouteMap3D({ route, onSelectStop, selectedOrderId, heroP
       opacity: 0.6,
     });
     const beam = new THREE.Mesh(beamGeo, beamMat);
-    beam.position.copy(vehicle.position);
+    beam.position.copy(vehicleGroup.position);
     beam.position.y = span * 0.03 + beamHeight / 2;
     scene.add(beam);
     disposables.push(beamGeo, beamMat);
@@ -940,7 +983,7 @@ export default function RouteMap3D({ route, onSelectStop, selectedOrderId, heroP
     const plateNum = heroProfile?.plateNumber || "";
     const vehicleLabel = createLabel(
       vehicle.position.clone(),
-      `<div class="r3d-label-body" style="color:#fde047; border-color:rgba(253,224,71,0.3)"><strong>${heroName}</strong>${plateNum ? ` · ${plateNum}` : ""}</div>`,
+      `<div class="r3d-label-body" style="color:#fde047; border-color:rgba(253,224,71,0.3)"><strong>${escapeHtml(heroName)}</strong>${plateNum ? ` · ${escapeHtml(plateNum)}` : ""}</div>`,
       false,
       undefined,
       "r3d-label-special"
@@ -1063,26 +1106,53 @@ export default function RouteMap3D({ route, onSelectStop, selectedOrderId, heroP
         detailTexDirty = false;
       }
 
-      // animated route draw
+      // animated route draw — full bright path always visible
       drawProgress = Math.min(1, drawProgress + dt * 0.25);
+      const gpsPos = driverPosRef.current;
+      const isStarted = routeStatusRef.current === "STARTED";
+      const isLive = isStarted && gpsPos;
       for (const p of paths) {
-        const count = Math.max(2, Math.floor(p.points.length * drawProgress));
-        p.line.geometry.setFromPoints(p.points.slice(0, count));
-        p.glow.geometry.setFromPoints(p.points.slice(0, count));
+        if (p.animated) {
+          const count = Math.max(2, Math.floor(p.points.length * drawProgress));
+          (p.line as THREE.Line).geometry.setFromPoints(p.points.slice(0, count));
+          (p.glow as THREE.Line).geometry.setFromPoints(p.points.slice(0, count));
+        }
+        // Passed overlay: draw from start to vehicle position
+        if (isLive && gpsPos) {
+          let minDist = Infinity;
+          let closestIdx = 1;
+          for (let i = 1; i < p.points.length; i++) {
+            const mid = new THREE.Vector3().addVectors(p.points[i - 1], p.points[i]).multiplyScalar(0.5);
+            const d = Math.hypot(mid.x - vehicle.position.x, mid.z - vehicle.position.z);
+            if (d < minDist) { minDist = d; closestIdx = i; }
+          }
+          const passedCount = Math.max(2, Math.min(closestIdx + 1, p.points.length));
+          p.passedLine.geometry.setFromPoints(p.points.slice(0, passedCount));
+          p.passedGlow.geometry.setFromPoints(p.points.slice(0, passedCount));
+        } else {
+          p.passedLine.geometry.setFromPoints([]);
+          p.passedGlow.geometry.setFromPoints([]);
+        }
       }
 
       // vehicle motion: use real GPS position when route is started + GPS available,
       // otherwise animate along the first path (demo mode)
-      const gpsPos = driverPosRef.current;
-      const isStarted = routeStatusRef.current === "STARTED";
-      const isLive = isStarted && gpsPos;
+      // (gpsPos, isStarted, isLive already extracted above)
       if (isLive) {
         // Real GPS position — smoothly lerp toward the new fix instead of snapping.
-        // This prevents the orb from "teleporting" every GPS poll and feels continuous.
         const gpsVec = latLonToVector3(gpsPos.latitude, gpsPos.longitude);
-        vehicle.position.x += (gpsVec.x - vehicle.position.x) * 0.05;
-        vehicle.position.z += (gpsVec.z - vehicle.position.z) * 0.05;
+        vehicle.position.x += (gpsVec.x - vehicle.position.x) * 0.1;
+        vehicle.position.z += (gpsVec.z - vehicle.position.z) * 0.1;
         vehicle.position.y = span * 0.03;
+        // Rotate orb + arrow to match GPS heading (smooth lerp)
+        const hdg = driverHeadingRef.current;
+        if (hdg !== null) {
+          const targetAngle = -hdg * Math.PI / 180; // heading 0=N, Three.js angle 0=+Z
+          let delta = targetAngle - vehicle.rotation.y;
+          while (delta > Math.PI) delta -= Math.PI * 2;
+          while (delta < -Math.PI) delta += Math.PI * 2;
+          vehicle.rotation.y += delta * 0.08;
+        }
         vehicleLabel.worldPos.copy(vehicle.position);
       } else if (firstPath.length > 1) {
         // Animated demo motions along first path
@@ -1183,10 +1253,6 @@ export default function RouteMap3D({ route, onSelectStop, selectedOrderId, heroP
       renderer.domElement.removeEventListener("webglcontextlost", onContextLost, false);
       controls.dispose();
       for (const d of disposables) d.dispose();
-      for (const p of paths) {
-        p.line.geometry.dispose();
-        (p.line.material as THREE.Material).dispose();
-      }
       vehicleGeo.dispose();
       vehicleMat.dispose();
       renderer.dispose();
@@ -1198,8 +1264,7 @@ export default function RouteMap3D({ route, onSelectStop, selectedOrderId, heroP
         entry.el.remove();
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [route]);
+  }, [route, customRoutePath, mapStyle]);
 
   // Update stop marker + label colors when tracking tokens change (done/not done)
   useEffect(() => {
@@ -1219,39 +1284,38 @@ export default function RouteMap3D({ route, onSelectStop, selectedOrderId, heroP
         mat.emissive.setHex(col);
       }
     }
-    for (const entry of stopLabelsRef.current) {
+    const labelEntries = stopLabelsRef.current;
+    const meshEntries = stopMeshesRef.current;
+    for (let li = 0; li < labelEntries.length; li++) {
+      const entry = labelEntries[li];
+      const isOffice = meshEntries.find((m) => m.orderId === entry.orderId)?.isOffice;
+      const completed = !!tokens[entry.orderId]?.completed;
       let hex: string;
       let checkmark = "";
-      if (entry.numEl) {
-        // Determine color from orderId
-        const isOffice = stopMeshesRef.current.find(m => m.orderId === entry.orderId)?.isOffice;
-        if (isOffice) {
-          hex = "#3b82f6";
-        } else if (tokens[entry.orderId]?.completed) {
-          hex = "#22c55e";
-          checkmark = " ✓";
-        } else {
-          hex = "#f97316";
-        }
-        // Find the stop number from current label text (strip checkmark)
-        const currentText = entry.numEl.textContent?.replace(" ✓", "") || "";
-        entry.numEl.style.background = hex;
-        entry.numEl.textContent = currentText + checkmark;
+      if (isOffice) {
+        hex = "#3b82f6";
+      } else if (completed) {
+        hex = "#22c55e";
+        checkmark = " ✓";
+      } else {
+        hex = "#f97316";
       }
-      if (entry.nameEl) {
-        const isOffice = stopMeshesRef.current.find(m => m.orderId === entry.orderId)?.isOffice;
-        if (!isOffice) {
-          entry.nameEl.style.color = tokens[entry.orderId]?.completed ? "#22c55e" : "#f97316";
-        } else {
-          entry.nameEl.style.color = "#3b82f6";
-        }
+      const numEl = entry.numEl;
+      if (numEl) {
+        const currentText = numEl.textContent?.replace(" ✓", "") || "";
+        numEl.style.background = hex;
+        numEl.textContent = currentText + checkmark;
+      }
+      const nameEl = entry.nameEl;
+      if (nameEl) {
+        nameEl.style.color = hex;
       }
     }
   }, [trackingTokens]);
 
   if (mapError) {
     return (
-      <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-4 text-center" style={{ background: "oklch(0.13 0.02 180)", minHeight: 380 }}>
+      <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-4 text-center" style={{ background: mapStyle === "light" ? "oklch(0.97 0 0)" : "oklch(0.13 0.02 180)", minHeight: 380 }}>
         <MapPin className="h-8 w-8 text-muted-foreground" />
         <p className="text-sm font-semibold text-foreground">Map unavailable</p>
         <p className="text-xs text-muted-foreground max-w-xs">{mapError}</p>
@@ -1263,8 +1327,19 @@ export default function RouteMap3D({ route, onSelectStop, selectedOrderId, heroP
     <div
       ref={mountRef}
       className="relative h-full w-full r3d-mount"
-      style={{ minHeight: 380, background: "oklch(0.13 0.02 180)" }}
+      style={{ minHeight: 380, background: mapStyle === "light" ? "oklch(0.97 0 0)" : "oklch(0.13 0.02 180)" }}
     >
+      {/* Map style toggle (light/dark) — top-right, next to lock button */}
+      {onMapStyleChange && (
+        <button
+          onClick={() => onMapStyleChange(mapStyle === "dark" ? "light" : "dark")}
+          className="absolute right-14 top-3 z-40 flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-background/80 text-muted-foreground shadow-lg backdrop-blur-md transition-colors hover:bg-white/10 hover:text-foreground"
+          title={mapStyle === "dark" ? "Switch to light map" : "Switch to dark map"}
+          aria-label={mapStyle === "dark" ? "Switch to light map" : "Switch to dark map"}
+        >
+          {mapStyle === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+        </button>
+      )}
       {/* HTML overlay labels (populated by useEffect) */}
       <div ref={labelsRef} className="r3d-labels" />
 

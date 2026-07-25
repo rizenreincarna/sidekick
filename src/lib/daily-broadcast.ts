@@ -64,16 +64,9 @@ export async function broadcastDailySummaries(): Promise<{ sent: number; failed:
         pendingOrders: pendingOrders.length,
         scheduledOrders: scheduledOrders.length,
         totalPoints,
-        maxDailyPoints: MAX_DAILY_POINTS,
         ordersWithNotes: ordersWithNotes.map(o => ({
           orderId: o.orderId, customerName: o.customerName, notes: o.notes || "",
           scheduledDate: o.scheduledDate, status: o.status,
-        })),
-        todaySchedule: todayOrders.map(o => ({
-          orderId: o.orderId, customerName: o.customerName, address: o.address, city: o.city,
-          zone: o.zone, size: o.size, points: o.points, isOffice: o.isOffice,
-          isEvent: o.isEvent, isErthbox: o.isErthbox, scheduledDate: o.scheduledDate || "",
-          status: o.status, notes: o.notes,
         })),
         tomorrowSchedule: tomorrowOrders.map(o => ({
           orderId: o.orderId, customerName: o.customerName, address: o.address, city: o.city,

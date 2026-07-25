@@ -181,12 +181,10 @@ private fun ExpandableMetricCard(label: String, value: String, sub: String, pct:
 @Composable
 private fun SparklineChart(modifier: Modifier, dataKey: String) {
     var points by remember { mutableStateOf<List<Float>>(emptyList()) }
-    val auth = remember { "Basic " + android.util.Base64.encodeToString("tars:@liBABA1122".toByteArray(), android.util.Base64.NO_WRAP) }
     LaunchedEffect(dataKey) {
         try {
             val json = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 val conn = java.net.URL("https://work.rizen.space/api/stats/history").openConnection()
-                conn.setRequestProperty("Authorization", auth)
                 conn.getInputStream().bufferedReader().readText()
             }
             val arr = org.json.JSONArray(json)

@@ -38,7 +38,7 @@
   ],
   "exclude": [
     "node_modules",
-    "src-backup-",
+    "src-backup-*",
     "examples",
     "prisma/seed-holidays.ts"
   ]

@@ -170,12 +170,16 @@ export async function GET(
     }
   }
 
+  // Determine live status: only show active tracking if the route is STARTED.
+  const isLive = routeStatus === "STARTED";
+
   // Build the route path for the map (driver → uncompleted prev stops → customer)
   let routePath: [number, number][] = [];
   let eta: { minutes: number; distanceKm: number; stopsBefore: number } | null = null;
   let driverPosition: { latitude: number; longitude: number; updatedAt: string } | null = null;
 
-  if (driverLoc) {
+  // Only compute live ETA and driver position if the route is STARTED
+  if (isLive && driverLoc) {
     driverPosition = {
       latitude: driverLoc.latitude,
       longitude: driverLoc.longitude,
@@ -263,8 +267,13 @@ export async function GET(
     minute: "2-digit",
   });
 
+  // Only show live tracking if the route is STARTED; otherwise it's just scheduled.
+  const driverStopped = isLive && !driverLoc || routeStatus === "STOPPED";
+
   return NextResponse.json({
-    status: "active",
+    status: isLive ? "active" : "scheduled",
+    driverStopped,
+    routeStatus,
     customerName: link.customerName,
     customerAddress,
     customerPosition: { latitude: link.latitude, longitude: link.longitude },
@@ -280,9 +289,5 @@ export async function GET(
     plateNumber,
     vehicleColor,
     routeDate: link.routeDate,
-    // Driver stopped broadcasting (emergency stop): the route was started but
-    // the driver cleared their GPS position. The customer sees an exception banner.
-    driverStopped: routeStatus === "STOPPED",
-    routeStatus,
   });
 }

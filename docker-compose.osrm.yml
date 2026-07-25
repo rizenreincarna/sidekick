@@ -12,12 +12,12 @@
 
 services:
   osrm:
-    image: osrm/osrm-backend
+    image: osrm/osrm-backend@sha256:af5d4a83fb90086a43b1ae2ca22872e6768766ad5fcbb07a29ff90ec644ee409
     container_name: osrm
     # Change "malaysia-latest" if you built a different extract.
     command: osrm-routed --algorithm mld /data/malaysia-latest.osrm
     ports:
-      - "5000:5000"
+      - "127.0.0.1:5000:5000"
     volumes:
       - ./osrm-data:/data
     restart: unless-stopped

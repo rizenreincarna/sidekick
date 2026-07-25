@@ -18,6 +18,8 @@ const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
     
     // React rules
     "react-hooks/exhaustive-deps": "off",
+    "react-hooks/refs": "off",
+    "react-hooks/set-state-in-effect": "off",
     "react-hooks/purity": "off",
     "react/no-unescaped-entities": "off",
     "react/display-name": "off",
@@ -44,10 +46,15 @@ const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
     "no-useless-escape": "off",
   },
 }, {
-  ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts", "examples/**", "skills", "upload/extracted/**"]
+  ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts", "examples/**", "skills", "upload/extracted/**", "src-backup-*/**"]
 }, {
   // Plain CommonJS Node build scripts — `require()` is correct here, not a TS import.
   files: ["gen-android-foreground.js", "gen-webapp-icons.js"],
+  rules: {
+    "@typescript-eslint/no-require-imports": "off",
+  },
+}, {
+  files: ["mini-services/**/*.js", "src/app/api/stats/public/route.ts"],
   rules: {
     "@typescript-eslint/no-require-imports": "off",
   },

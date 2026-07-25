@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/session";
 import { db } from "@/lib/db";
 import { verifyTOTP } from "@/lib/totp";
+import { decryptSecret } from "@/lib/secrets";
 
 // POST: Disable 2FA (requires current TOTP code)
 export async function POST(request: NextRequest) {
@@ -20,7 +21,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "2FA is not enabled" }, { status: 400 });
     }
 
-    const isValid = verifyTOTP(token, dbUser.twoFactorSecret!);
+    const isValid = verifyTOTP(token, decryptSecret(dbUser.twoFactorSecret!));
     if (!isValid) {
       return NextResponse.json({ error: "Invalid verification code" }, { status: 400 });
     }

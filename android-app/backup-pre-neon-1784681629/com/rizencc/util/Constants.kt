@@ -3,10 +3,8 @@ package com.rizencc.util
 object Constants {
     // Backend
     const val BASE_URL = "https://work.rizen.space"
-    const val BASIC_USER = "tars"
-    const val BASIC_PASS = "sgnjhj9x6WpTitVM"
     
-    // Endpoints (all behind nginx auth_basic)
+    // Endpoints use the server's normal session/login flow.
     const val CHAT_API = "$BASE_URL/chat-api"        // POST /chat
     const val STATS_API = "$BASE_URL/api/stats"       // GET — system metrics
     const val SIDEKICK_STATS = "$BASE_URL/api/stats/public"  // GET — order stats

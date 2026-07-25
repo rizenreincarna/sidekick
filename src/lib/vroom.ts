@@ -186,6 +186,14 @@ export interface VroomStopDetail {
   loadAfter: number; // cumulative points after this stop
 }
 
+export interface DropAlternative {
+  dropOff: "DROP_A" | "DROP_B";
+  distanceMeters: number;
+  durationSeconds: number;
+  dropOffArrival: number;
+  homeArrival: number;
+}
+
 export interface VroomLoadPlan {
   vehicleId: number;
   dropOff: "DROP_A" | "DROP_B";
@@ -195,6 +203,8 @@ export interface VroomLoadPlan {
   durationSeconds: number;
   distanceMeters: number;
   loadPoints: number;
+  /** Distance/duration if this load ended at the other drop point. */
+  alternative: DropAlternative;
 }
 
 export interface OptimizedRouteResult {
@@ -207,6 +217,10 @@ export interface OptimizedRouteResult {
   totalPoints: number;
   capacity: number;
   unassigned: { orderId: string; reason: string }[];
+  /** Total distance if every load used the non-chosen drop point. */
+  totalAlternativeDistanceMeters: number;
+  /** Total duration if every load used the non-chosen drop point. */
+  totalAlternativeDurationSeconds: number;
   source: "vroom" | "nearest-neighbor";
   summary: {
     cost: number;
@@ -618,6 +632,28 @@ function travelSec(a: [number, number], b: [number, number]): { dur: number; dis
   return { dur: Math.round((km * 1000) / mps), dist: Math.round(km * 1000) };
 }
 
+function computeDropAlternative(
+  lastLoc: [number, number],
+  lastTime: number,
+  dropOff: "DROP_A" | "DROP_B",
+  homeCoord: [number, number]
+): DropAlternative {
+  const dropLoc = dropOff === "DROP_B" ? FIXED_LOCATIONS.DROP_B : FIXED_LOCATIONS.DROP_A;
+  const dropCoord: [number, number] = [dropLoc.longitude, dropLoc.latitude];
+  const toDrop = travelSec(lastLoc, dropCoord);
+  const dropArr = lastTime + toDrop.dur;
+  const dropService = VEHICLE.serviceTimeDrop * 60;
+  const toHome = travelSec(dropCoord, homeCoord);
+  const homeArr = dropArr + dropService + toHome.dur;
+  return {
+    dropOff,
+    distanceMeters: toDrop.dist + toHome.dist,
+    durationSeconds: toDrop.dur + dropService + toHome.dur,
+    dropOffArrival: dropArr,
+    homeArrival: homeArr,
+  };
+}
+
 export function stitchSolution(
   solution: VroomSolution,
   orders: VroomOrderInput[],
@@ -629,12 +665,12 @@ export function stitchSolution(
   const loads: VroomLoadPlan[] = [];
   let totalDistance = 0;
   let totalDuration = 0;
+  let totalAlternativeDistance = 0;
+  let totalAlternativeDuration = 0;
   const unassigned: { orderId: string; reason: string }[] = [];
 
   for (const r of solution.routes) {
-    const dropOff = determineRouteDropOff(r, ordersByDbId, idMapping);
-    const dropLoc = dropOff === "DROP_B" ? FIXED_LOCATIONS.DROP_B : FIXED_LOCATIONS.DROP_A;
-    const dropCoord: [number, number] = [dropLoc.longitude, dropLoc.latitude];
+    const majorityDropOff = determineRouteDropOff(r, ordersByDbId, idMapping);
     const homeCoord: [number, number] = homeOverride
       ? [homeOverride.longitude, homeOverride.latitude]
       : [FIXED_LOCATIONS.HOME.longitude, FIXED_LOCATIONS.HOME.latitude];
@@ -665,7 +701,7 @@ export function stitchSolution(
         isOffice: o.isOffice,
         latitude: o.latitude!,
         longitude: o.longitude!,
-        dropOff,
+        dropOff: majorityDropOff,
         arrival: step.arrival,
         departure: step.arrival + (step.service || VEHICLE.serviceTimePickup * 60),
         serviceSeconds: step.service || VEHICLE.serviceTimePickup * 60,
@@ -677,28 +713,30 @@ export function stitchSolution(
 
     if (stops.length === 0) continue;
 
-    // Insert drop-off before returning home
-    const toDrop = travelSec(lastLoc, dropCoord);
-    const dropArr = lastTime + toDrop.dur;
-    const dropService = VEHICLE.serviceTimeDrop * 60;
-    const toHome = travelSec(dropCoord, homeCoord);
-    const homeArr = dropArr + dropService + toHome.dur;
+    // Compare actual routing cost for ending this load at A vs B.
+    const altA = computeDropAlternative(lastLoc, lastTime, "DROP_A", homeCoord);
+    const altB = computeDropAlternative(lastLoc, lastTime, "DROP_B", homeCoord);
+    const primary = altA.distanceMeters <= altB.distanceMeters ? altA : altB;
+    const alternative = primary.dropOff === "DROP_A" ? altB : altA;
 
-    const loadDuration = homeArr - (r.steps[0]?.arrival ?? buildTimeWindow(date)[0]);
-    const loadDistance = r.distance + toDrop.dist + toHome.dist;
+    const loadDuration = primary.homeArrival - (r.steps[0]?.arrival ?? buildTimeWindow(date)[0]);
+    const loadDistance = r.distance + primary.distanceMeters;
 
     loads.push({
       vehicleId: r.vehicle,
-      dropOff,
+      dropOff: primary.dropOff,
       stops,
-      dropOffArrival: dropArr,
-      homeArrival: homeArr,
+      dropOffArrival: primary.dropOffArrival,
+      homeArrival: primary.homeArrival,
       durationSeconds: loadDuration,
       distanceMeters: loadDistance,
       loadPoints: cumLoad,
+      alternative,
     });
     totalDistance += loadDistance;
     totalDuration += loadDuration;
+    totalAlternativeDistance += r.distance + alternative.distanceMeters;
+    totalAlternativeDuration += alternative.homeArrival - (r.steps[0]?.arrival ?? buildTimeWindow(date)[0]);
   }
 
   for (const u of solution.unassigned) {
@@ -719,6 +757,8 @@ export function stitchSolution(
     totalPoints,
     capacity: VEHICLE.capacity,
     unassigned,
+    totalAlternativeDistanceMeters: totalAlternativeDistance,
+    totalAlternativeDurationSeconds: totalAlternativeDuration,
     source: "vroom",
     summary: solution.summary,
   };
@@ -740,6 +780,152 @@ function determineRouteDropOff(
     counts[d]++;
   }
   return counts.DROP_B > counts.DROP_A ? "DROP_B" : "DROP_A";
+}
+
+/** Recompute a load's drop-off leg and totals when the user switches drop point. */
+export function recomputeLoadDropOff(
+  load: VroomLoadPlan,
+  newDropOff: "DROP_A" | "DROP_B",
+  homeOverride?: { latitude: number; longitude: number }
+): VroomLoadPlan {
+  if (load.dropOff === newDropOff) return load;
+
+  const homeCoord: [number, number] = homeOverride
+    ? [homeOverride.longitude, homeOverride.latitude]
+    : [FIXED_LOCATIONS.HOME.longitude, FIXED_LOCATIONS.HOME.latitude];
+
+  // Last pickup location/time from existing stops.
+  const lastStop = load.stops[load.stops.length - 1];
+  const lastLoc: [number, number] = [lastStop.longitude, lastStop.latitude];
+  const lastTime = lastStop.departure;
+
+  const newAlt = computeDropAlternative(lastLoc, lastTime, newDropOff, homeCoord);
+  const oldAlt: DropAlternative = {
+    dropOff: load.dropOff,
+    distanceMeters: load.alternative.distanceMeters,
+    durationSeconds: load.alternative.durationSeconds,
+    dropOffArrival: load.alternative.dropOffArrival,
+    homeArrival: load.alternative.homeArrival,
+  };
+
+  // Pickup leg (r.distance / r.duration) is the part before the drop-off.
+  const pickupDistance = load.distanceMeters - oldAlt.distanceMeters;
+  const pickupDuration = load.durationSeconds - oldAlt.durationSeconds;
+
+  return {
+    ...load,
+    dropOff: newAlt.dropOff,
+    dropOffArrival: newAlt.dropOffArrival,
+    homeArrival: newAlt.homeArrival,
+    distanceMeters: pickupDistance + newAlt.distanceMeters,
+    durationSeconds: pickupDuration + newAlt.durationSeconds,
+    alternative: oldAlt,
+  };
+}
+
+/** Recalculate entire route totals after one or more loads have been edited. */
+export function recalculateRouteTotals(route: OptimizedRouteResult): OptimizedRouteResult {
+  const totalDistanceMeters = route.loads.reduce((s, l) => s + l.distanceMeters, 0);
+  const totalDurationSeconds = route.loads.reduce((s, l) => s + l.durationSeconds, 0);
+  const totalAlternativeDistanceMeters = route.loads.reduce(
+    (s, l) => s + l.distanceMeters - l.alternative.distanceMeters + (l.alternative.dropOff === l.dropOff ? 0 : l.alternative.distanceMeters),
+    0
+  );
+  const totalAlternativeDurationSeconds = route.loads.reduce(
+    (s, l) => s + l.durationSeconds - l.alternative.durationSeconds + (l.alternative.dropOff === l.dropOff ? 0 : l.alternative.durationSeconds),
+    0
+  );
+  return {
+    ...route,
+    totalDistanceMeters,
+    totalDurationSeconds,
+    totalAlternativeDistanceMeters,
+    totalAlternativeDurationSeconds,
+  };
+}
+
+/** Move a stop within a load and recalculate arrival/departure times. */
+export function reorderStopsInLoad(
+  load: VroomLoadPlan,
+  fromIndex: number,
+  toIndex: number,
+  homeOverride?: { latitude: number; longitude: number }
+): VroomLoadPlan {
+  const stops = [...load.stops];
+  const [moved] = stops.splice(fromIndex, 1);
+  stops.splice(toIndex, 0, moved);
+  return recalcLoadStopsWith(load, stops, homeOverride);
+}
+
+/** Reverse all stops in a load and recalculate. */
+export function reverseStopsInLoad(
+  load: VroomLoadPlan,
+  homeOverride?: { latitude: number; longitude: number }
+): VroomLoadPlan {
+  return recalcLoadStopsWith(load, [...load.stops].reverse(), homeOverride);
+}
+
+/** Recalculate a load's stops (ETAs, distances) after manual reordering. */
+function recalcLoadStopsWith(
+  load: VroomLoadPlan,
+  newStops: VroomStopDetail[],
+  homeOverride?: { latitude: number; longitude: number }
+): VroomLoadPlan {
+  const homeCoord: [number, number] = homeOverride
+    ? [homeOverride.longitude, homeOverride.latitude]
+    : [FIXED_LOCATIONS.HOME.longitude, FIXED_LOCATIONS.HOME.latitude];
+
+  const mps = (VEHICLE.avgSpeed * 1000) / 3600;
+  const pickupSvc = VEHICLE.serviceTimePickup * 60;
+
+  let cumLoad = 0;
+  let curLoc: [number, number] = homeCoord;
+  // Start time: use the earliest stop's arrival as a base, or noon default
+  const baseTime = newStops.length > 0
+    ? newStops.reduce((min, s) => Math.min(min, s.arrival), newStops[0].arrival)
+    : buildTimeWindow(load.stops[0]?.arrival
+        ? new Date(load.stops[0].arrival * 1000).toISOString().slice(0, 10)
+        : new Date().toISOString().slice(0, 10))[0];
+  let curTime = baseTime;
+
+  const recalc = newStops.map((s) => {
+    const loc: [number, number] = [s.longitude, s.latitude];
+    const km = haversineKm(curLoc[1], curLoc[0], loc[1], loc[0]);
+    const travel = Math.round((km * 1000) / mps);
+    const arr = curTime + travel;
+    cumLoad += s.points;
+    const dep = arr + pickupSvc;
+    curLoc = loc;
+    curTime = dep;
+    return { ...s, arrival: arr, departure: dep, loadAfter: cumLoad };
+  });
+
+  // Recompute drop-off and home legs from the last stop
+  const lastStop = recalc[recalc.length - 1];
+  const lastLoc: [number, number] = [lastStop.longitude, lastStop.latitude];
+  const lastTime = lastStop.departure;
+  const altA = computeDropAlternative(lastLoc, lastTime, "DROP_A", homeCoord);
+  const altB = computeDropAlternative(lastLoc, lastTime, "DROP_B", homeCoord);
+  const primary = altA.distanceMeters <= altB.distanceMeters ? altA : altB;
+  const alternative = primary.dropOff === "DROP_A" ? altB : altA;
+
+  const pickupKm = recalc.reduce((sum, s, i) => {
+    const prev = i === 0 ? homeCoord : [recalc[i - 1].longitude, recalc[i - 1].latitude] as [number, number];
+    return sum + haversineKm(prev[1], prev[0], s.latitude, s.longitude);
+  }, 0);
+  const pickupDist = Math.round(pickupKm * 1000);
+  const pickupDur = recalc[recalc.length - 1].departure - baseTime;
+
+  return {
+    ...load,
+    stops: recalc,
+    dropOff: primary.dropOff,
+    dropOffArrival: primary.dropOffArrival,
+    homeArrival: primary.homeArrival,
+    distanceMeters: pickupDist + primary.distanceMeters,
+    durationSeconds: pickupDur + primary.durationSeconds,
+    alternative,
+  };
 }
 
 // ---------------------------------------------------------------------------

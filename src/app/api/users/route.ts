@@ -68,9 +68,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (password.length < 4) {
+    if (typeof password !== "string" || password.length < 12) {
       return NextResponse.json(
-        { error: "Password must be at least 4 characters" },
+        { error: "Password must be at least 12 characters" },
         { status: 400 }
       );
     }

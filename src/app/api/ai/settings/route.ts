@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/session";
 import { db } from "@/lib/db";
 import { validateApiKey } from "@/lib/deepseek";
+import { encryptSecret, decryptSecret } from "@/lib/secrets";
 
 export async function GET() {
   const { user, error } = await requireAdmin();
@@ -54,10 +55,11 @@ export async function PUT(request: NextRequest) {
     // Save each setting
     for (const [key, value] of Object.entries(body)) {
       if (typeof value === "string" && key.startsWith("ai_") && key.length <= 50) {
+        const stored = key === "ai_api_key" && value ? encryptSecret(value) : value;
         await db.setting.upsert({
           where: { userId_key: { userId: user.id, key } },
-          update: { value },
-          create: { key, value, userId: user.id },
+          update: { value: stored },
+          create: { key, value: stored, userId: user.id },
         });
       }
     }

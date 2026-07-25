@@ -33,9 +33,9 @@ export async function PATCH(request: NextRequest) {
     }
 
     // Verify ownership + validate transitions
-    const where: Record<string, unknown> = {
+    const where = {
       id: { in: orderIds },
-      ...(user.role === "HERO" ? { userId: user.id } : {}),
+      userId: user.id,
     };
 
     // Fetch current orders to validate transitions
@@ -64,7 +64,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     const result = await db.order.updateMany({
-      where: { id: { in: validOrderIds } },
+      where: { id: { in: validOrderIds }, userId: user.id },
       data: { status },
     });
 

@@ -9,20 +9,6 @@
     <!-- Microphone for voice agent -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
-    <!-- Push notifications (Android 13+) -->
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-
-    <!-- Foreground service for ntfy + Live Mode -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
-
-    <!-- Boot receiver so ntfy service restarts after reboot -->
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-
-    <!-- Vibrate for notifications -->
-    <uses-permission android:name="android.permission.VIBRATE" />
-
     <application
         android:name=".RizenApp"
         android:allowBackup="false"
@@ -49,19 +35,6 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-
-        <!-- ntfy notification service: NOT exported (internal only) -->
-        <service
-            android:name=".service.NtfyNotificationService"
-            android:exported="false"
-            android:foregroundServiceType="dataSync" />
-
-        <!-- Boot receiver: NOT exported — system still delivers BOOT_COMPLETED since API 26 -->
-        <receiver android:name=".service.BootReceiver" android:exported="false">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-            </intent-filter>
-        </receiver>
 
     </application>
 </manifest>

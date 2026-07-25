@@ -31,11 +31,8 @@ After a successful build:
 
 - Debug APK (for testing on your phone):
   `app/build/outputs/apk/debug/app-debug.apk`
-- Release AAB (for Play Store upload):
+- Unsigned release AAB:
   `app/build/outputs/bundle/release/app-release.aab`
-
-The release AAB is signed with `sidekick-release.jks`
-(password: `sidekick2026`, alias: `sidekick`) — see "Signing" below.
 
 ---
 
@@ -71,7 +68,7 @@ From `D:\sidekickv3\android-app`:
 # Debug APK (installs on any device, debug-signed)
 .\gradlew.bat assembleDebug
 
-# Release AAB (for Play Store) — signed with keystore.properties
+# Unsigned release AAB (sign in the controlled release pipeline)
 .\gradlew.bat bundleRelease
 ```
 
@@ -201,29 +198,6 @@ node -e "const sharp=require('sharp');const s=512,p=s*0.18,i=s-p*2;const svg=`<s
 
 ---
 
-## Signing (keystore)
-
-The release AAB is signed with `sidekick-release.jks` (in the project root).
-Credentials live in `keystore.properties` (gitignored — do NOT commit):
-
-```
-storeFile=D:/sidekickv3/android-app/sidekick-release.jks
-storePassword=sidekick2026
-keyAlias=sidekick
-keyPassword=sidekick2026
-```
-
-**IMPORTANT for Play Store:** Google uses your signing key to verify app updates.
-Keep `sidekick-release.jks` and these passwords SAFE — losing them means you can't
-update the published app. Back up the `.jks` file somewhere secure (e.g. encrypted
-cloud storage). Consider opting into **Play App Signing** during your first
-release so Google holds an upload key and can rotate it for you.
-
-If you ever lose the keystore, you must use Play App Signing's "request upload
-key reset" (requires the original signing cert to be registered with Play).
-
----
-
 ## Project structure
 
 ```
@@ -233,8 +207,6 @@ android-app/
 ├── gradle.properties
 ├── gradlew.bat                   # Windows wrapper
 ├── gradle/wrapper/                # wrapper jar + props
-├── keystore.properties            # signing creds (gitignored)
-├── sidekick-release.jks           # release keystore (gitignored — back up!)
 ├── app/
 │   ├── build.gradle.kts           # app module + conditional Firebase
 │   ├── proguard-rules.pro
@@ -273,8 +245,10 @@ Server-side push wiring (in the webapp, already deployed):
 ## .gitignore (add these to android-app/.gitignore)
 
 ```
-keystore.properties
-sidekick-release.jks
+*.keystore
+*.jks
+**/keystore.properties
+**/signing.properties
 app/google-services.json
 .gradle/
 build/

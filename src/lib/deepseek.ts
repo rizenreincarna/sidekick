@@ -1,6 +1,8 @@
 // /home/z/my-project/src/lib/deepseek.ts
 
 import { db } from "./db";
+import { guardedProviderFetch } from "./ai-fetch";
+import { decryptSecret } from "./secrets";
 
 // ============ TYPES ============
 
@@ -23,6 +25,21 @@ export interface DailySummaryData {
   pendingOrders: number;
   scheduledOrders: number;
   totalPoints: number;
+  todaySchedule?: Array<{
+    orderId: string;
+    customerName: string;
+    address: string;
+    city: string;
+    zone: number;
+    size: string;
+    points: number;
+    isOffice: boolean;
+    isEvent: boolean;
+    isErthbox: boolean;
+    scheduledDate: string;
+    status: string;
+    notes: string | null;
+  }>;
   ordersWithNotes: Array<{
     orderId: string;
     customerName: string;
@@ -99,7 +116,7 @@ export async function getAiSettings(): Promise<{
   }
 
   return {
-    apiKey: config.ai_api_key || "",
+    apiKey: decryptSecret(config.ai_api_key || ""),
     baseUrl: config.ai_base_url || "https://api.deepseek.com",
     model: config.ai_model || "deepseek-chat",
     enabled: config.ai_enabled === "true",
@@ -276,7 +293,7 @@ export async function chatWithDeepSeek(
       ...messages,
     ];
 
-    const response = await fetch(`${settings.baseUrl}/v1/chat/completions`, {
+    const response = await guardedProviderFetch(`${settings.baseUrl}/v1/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -351,7 +368,7 @@ export async function checkForDangerousContent(userMessage: string): Promise<Fla
   }
 
   try {
-    const response = await fetch(`${settings.baseUrl}/v1/chat/completions`, {
+    const response = await guardedProviderFetch(`${settings.baseUrl}/v1/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -494,7 +511,7 @@ Please suggest:
 
 export async function validateApiKey(apiKey: string, baseUrl: string = "https://api.deepseek.com", model: string = "deepseek-chat"): Promise<{ valid: boolean; error?: string }> {
   try {
-    const response = await fetch(`${baseUrl}/v1/chat/completions`, {
+    const response = await guardedProviderFetch(`${baseUrl}/v1/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
