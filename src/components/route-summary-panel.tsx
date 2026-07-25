@@ -7,7 +7,7 @@ import { FIXED_LOCATIONS, VEHICLE } from "@/lib/route-model";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Save, Play, MapPin, Home, ChevronDown, ChevronRight, Navigation, MessageCircle, CheckCircle2, RotateCcw, GripVertical, ArrowUpDown } from "lucide-react";
+import { Save, Play, MapPin, Home, ChevronDown, ChevronRight, Navigation, MessageCircle, CheckCircle2, RotateCcw, GripVertical, ArrowUpDown, ChevronUp } from "lucide-react";
 
 interface Props {
   route: OptimizedRouteResult;
@@ -368,6 +368,45 @@ function LoadBlock({
                     setDragIndex(null);
                     setDragOverIndex(null);
                   }}
+                  // Touch drag support — replicates HTML5 drag on touch devices
+                  onTouchStart={(e) => {
+                    if (!onReorderStops) return;
+                    // Only activate when touching the grip handle
+                    const grip = (e.currentTarget as HTMLElement).querySelector('[data-grip]');
+                    if (!grip) return;
+                    const touch = e.touches[0];
+                    const gripRect = grip.getBoundingClientRect();
+                    if (touch.clientX < gripRect.left - 10 || touch.clientX > gripRect.right + 10 ||
+                        touch.clientY < gripRect.top - 10 || touch.clientY > gripRect.bottom + 10) return;
+                    setDragIndex(i);
+                  }}
+                  onTouchMove={(e) => {
+                    if (dragIndex === null) return;
+                    const touch = e.touches[0];
+                    const el = document.elementFromPoint(touch.clientX, touch.clientY);
+                    const li = el?.closest('[data-stop-index]') as HTMLElement | null;
+                    if (li) {
+                      const idx = parseInt(li.dataset.stopIndex || "", 10);
+                      if (!isNaN(idx)) setDragOverIndex(idx);
+                    }
+                  }}
+                  onTouchEnd={(e) => {
+                    if (!onReorderStops || dragIndex === null) {
+                      setDragIndex(null);
+                      setDragOverIndex(null);
+                      return;
+                    }
+                    const touch = e.changedTouches[0];
+                    const el = document.elementFromPoint(touch.clientX, touch.clientY);
+                    const li = el?.closest('[data-stop-index]') as HTMLElement | null;
+                    const targetIdx = li ? parseInt(li.dataset.stopIndex || "", 10) : -1;
+                    if (!isNaN(targetIdx) && targetIdx >= 0 && targetIdx !== dragIndex) {
+                      onReorderStops(index, dragIndex, targetIdx);
+                    }
+                    setDragIndex(null);
+                    setDragOverIndex(null);
+                  }}
+                  data-stop-index={i}
                 >
                   <div
                     className={`flex w-full flex-col px-3 py-2.5 text-left text-xs transition-colors hover:bg-white/5 ${
@@ -379,13 +418,34 @@ function LoadBlock({
                       className="flex w-full items-start gap-2.5 text-left"
                     >
                       {onReorderStops && (
-                        <span className="mt-0.5 flex h-5 w-5 shrink-0 cursor-grab items-center justify-center text-muted-foreground/50 active:cursor-grabbing">
+                        <span data-grip className="mt-0.5 flex h-5 w-5 shrink-0 cursor-grab items-center justify-center text-muted-foreground/50 active:cursor-grabbing touch-none">
                           <GripVertical className="h-3.5 w-3.5" />
                         </span>
                       )}
                       <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/20 text-[0.625rem] font-bold text-primary">
                         {i + 1}
                       </span>
+                      {/* Move up/down arrow buttons */}
+                      {onReorderStops && (
+                        <span className="flex shrink-0 flex-col gap-px">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); if (i > 0) onReorderStops(index, i, i - 1); }}
+                            disabled={i === 0}
+                            className="flex h-3.5 w-4 items-center justify-center rounded text-muted-foreground/60 hover:bg-white/10 hover:text-foreground disabled:opacity-25 disabled:cursor-default"
+                            aria-label={`Move stop ${i + 1} up`}
+                          >
+                            <ChevronUp className="h-3 w-3" />
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); if (i < load.stops.length - 1) onReorderStops(index, i, i + 1); }}
+                            disabled={i >= load.stops.length - 1}
+                            className="flex h-3.5 w-4 items-center justify-center rounded text-muted-foreground/60 hover:bg-white/10 hover:text-foreground disabled:opacity-25 disabled:cursor-default"
+                            aria-label={`Move stop ${i + 1} down`}
+                          >
+                            <ChevronDown className="h-3 w-3" />
+                          </button>
+                        </span>
+                      )}
                       <span className="flex-1 min-w-0">
                         <span className="block truncate font-medium text-foreground">
                           {s.customerName}{" "}

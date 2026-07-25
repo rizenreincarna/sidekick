@@ -1,26 +1,10 @@
 // /home/z/my-project/src/lib/deepseek.ts
 
 import { db } from "./db";
+import { guardedProviderFetch } from "./ai-fetch";
+import { decryptSecret } from "./secrets";
 
 // ============ TYPES ============
-
-export type AiProvider = "deepseek" | "agnes" | "custom";
-
-export const AI_PROVIDERS: Record<AiProvider, { label: string; baseUrl: string; model: string }> = {
-  deepseek: { label: "DeepSeek", baseUrl: "https://api.deepseek.com", model: "deepseek-chat" },
-  agnes: { label: "Agnes AI", baseUrl: "https://apihub.agnes-ai.com", model: "agnes-2.0-flash" },
-  custom: { label: "Custom", baseUrl: "", model: "" },
-};
-
-export interface AiSettings {
-  provider: AiProvider;
-  apiKey: string;
-  baseUrl: string;
-  model: string;
-  enabled: boolean;
-  systemPrompt: string;
-  agnesApiKey: string;
-}
 
 export interface ChatMessage {
   role: "user" | "assistant" | "system";
@@ -41,6 +25,21 @@ export interface DailySummaryData {
   pendingOrders: number;
   scheduledOrders: number;
   totalPoints: number;
+  todaySchedule?: Array<{
+    orderId: string;
+    customerName: string;
+    address: string;
+    city: string;
+    zone: number;
+    size: string;
+    points: number;
+    isOffice: boolean;
+    isEvent: boolean;
+    isErthbox: boolean;
+    scheduledDate: string;
+    status: string;
+    notes: string | null;
+  }>;
   ordersWithNotes: Array<{
     orderId: string;
     customerName: string;
@@ -89,7 +88,13 @@ export interface AiActionRequest {
 
 // ============ AI SETTINGS HELPER ============
 
-export async function getAiSettings(): Promise<AiSettings> {
+export async function getAiSettings(): Promise<{
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+  enabled: boolean;
+  systemPrompt: string;
+}> {
   // AI settings are stored as admin (system-wide) settings
   // We use the first admin user's settings as the system-wide config
   const adminUser = await db.user.findFirst({
@@ -98,7 +103,7 @@ export async function getAiSettings(): Promise<AiSettings> {
   });
 
   if (!adminUser) {
-    return { provider: "deepseek", apiKey: "", baseUrl: "https://api.deepseek.com", model: "deepseek-chat", enabled: false, systemPrompt: "", agnesApiKey: "" };
+    return { apiKey: "", baseUrl: "https://api.deepseek.com", model: "deepseek-chat", enabled: false, systemPrompt: "" };
   }
 
   const settings = await db.setting.findMany({
@@ -110,31 +115,13 @@ export async function getAiSettings(): Promise<AiSettings> {
     config[s.key] = s.value;
   }
 
-  const provider = (config.ai_provider || "deepseek") as AiProvider;
-  const agnesApiKey = config.ai_agnes_api_key || process.env.AGNES_API_KEY || "";
-  const enabled = config.ai_enabled === "true";
-  const systemPrompt = config.ai_system_prompt || "";
-
-  let apiKey: string;
-  let baseUrl: string;
-  let model: string;
-
-  if (provider === "agnes") {
-    apiKey = agnesApiKey;
-    baseUrl = config.ai_base_url || "https://apihub.agnes-ai.com";
-    model = config.ai_model || "agnes-2.0-flash";
-  } else if (provider === "custom") {
-    apiKey = config.ai_api_key || "";
-    baseUrl = config.ai_base_url || "";
-    model = config.ai_model || "";
-  } else {
-    // deepseek (default)
-    apiKey = config.ai_api_key || "";
-    baseUrl = config.ai_base_url || "https://api.deepseek.com";
-    model = config.ai_model || "deepseek-chat";
-  }
-
-  return { provider, apiKey, baseUrl, model, enabled, systemPrompt, agnesApiKey };
+  return {
+    apiKey: decryptSecret(config.ai_api_key || ""),
+    baseUrl: config.ai_base_url || "https://api.deepseek.com",
+    model: config.ai_model || "deepseek-chat",
+    enabled: config.ai_enabled === "true",
+    systemPrompt: config.ai_system_prompt || "",
+  };
 }
 
 export async function isAiEnabled(): Promise<boolean> {
@@ -147,7 +134,6 @@ export async function getAiStatus(): Promise<{
   hasApiKey: boolean;
   model: string;
   baseUrl: string;
-  provider: AiProvider;
 }> {
   const settings = await getAiSettings();
   return {
@@ -155,7 +141,6 @@ export async function getAiStatus(): Promise<{
     hasApiKey: settings.apiKey.length > 0,
     model: settings.model,
     baseUrl: settings.baseUrl,
-    provider: settings.provider,
   };
 }
 
@@ -308,7 +293,7 @@ export async function chatWithDeepSeek(
       ...messages,
     ];
 
-    const response = await fetch(`${settings.baseUrl}/v1/chat/completions`, {
+    const response = await guardedProviderFetch(`${settings.baseUrl}/v1/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -383,7 +368,7 @@ export async function checkForDangerousContent(userMessage: string): Promise<Fla
   }
 
   try {
-    const response = await fetch(`${settings.baseUrl}/v1/chat/completions`, {
+    const response = await guardedProviderFetch(`${settings.baseUrl}/v1/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -526,7 +511,7 @@ Please suggest:
 
 export async function validateApiKey(apiKey: string, baseUrl: string = "https://api.deepseek.com", model: string = "deepseek-chat"): Promise<{ valid: boolean; error?: string }> {
   try {
-    const response = await fetch(`${baseUrl}/v1/chat/completions`, {
+    const response = await guardedProviderFetch(`${baseUrl}/v1/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

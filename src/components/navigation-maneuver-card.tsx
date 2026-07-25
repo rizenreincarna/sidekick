@@ -58,9 +58,10 @@ interface Props {
   offRoute: boolean;
   rerouting: boolean;
   offline: boolean;
+  etaMs: number | null;
 }
 
-export default function NavigationManeuverCard({ step, nextStep, distanceToManeuver, offRoute, rerouting, offline }: Props) {
+export default function NavigationManeuverCard({ step, nextStep, distanceToManeuver, offRoute, rerouting, offline, etaMs }: Props) {
   return (
     <div className="pointer-events-auto rounded-2xl border border-white/10 bg-[#0b1417]/95 shadow-2xl shadow-black/50 backdrop-blur-md">
       <div className="flex items-center gap-3 px-4 py-3">
@@ -92,14 +93,19 @@ export default function NavigationManeuverCard({ step, nextStep, distanceToManeu
         </div>
       </div>
 
-      {/* Status strip + next-step preview */}
-      {(offRoute || offline || nextStep) && (
+      {/* Status strip + next-step preview + ETA */}
+      {(offRoute || offline || nextStep || etaMs) && (
         <div className="flex items-center gap-2 border-t border-white/10 px-4 py-1.5 text-xs">
           {offRoute && !rerouting && (
             <span className="font-semibold text-amber-400">Off route</span>
           )}
           {offline && (
             <span className="font-semibold text-amber-400">Offline routing</span>
+          )}
+          {etaMs && !rerouting && (
+            <span className="font-medium text-primary">
+              Arrive {new Date(etaMs).toLocaleTimeString("en-GB", { timeZone: "Asia/Kuala_Lumpur", hour: "numeric", minute: "2-digit", hour12: true })}
+            </span>
           )}
           {nextStep && !rerouting && (
             <span className="ml-auto flex min-w-0 items-center gap-1.5 text-muted-foreground">

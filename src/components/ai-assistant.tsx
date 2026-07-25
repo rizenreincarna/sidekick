@@ -40,6 +40,7 @@ interface AiConversationItem {
 }
 
 interface AiActionItem {
+  conversationId: string;
   id: string;
   conversationId?: string;
   actionType: string;

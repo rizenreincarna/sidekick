@@ -6,8 +6,13 @@ build/
 local.properties
 
 # Signing & secrets (NEVER commit)
+*.keystore
+*.jks
+gradle.properties
 keystore.properties
-sidekick-release.jks
+**/keystore.properties
+signing.properties
+**/signing.properties
 app/google-services.json
 
 # Generated

@@ -1,9 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { checkRateLimit, clientKeyFromRequest } from "@/lib/rate-limit";
 
 export async function POST(req: NextRequest) {
   try {
     const { username } = await req.json();
+    const key = clientKeyFromRequest(req, typeof username === "string" ? username : undefined);
+    const rl = checkRateLimit("check-2fa", key, 10, 60_000);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: "Too many attempts. Try again later." },
+        { status: 429, headers: { "Retry-After": String(rl.retryAfterSeconds) } }
+      );
+    }
 
     if (!username) {
       return NextResponse.json({ error: "Username required" }, { status: 400 });

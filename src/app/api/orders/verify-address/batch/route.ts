@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/session";
+import { db } from "@/lib/db";
 import { verifyOrderAddress } from "@/lib/address-verify";
 import {
   createSession,
@@ -23,8 +24,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Maximum 50 orders per batch" }, { status: 400 });
     }
 
-    const sessionId = createSession(body.orderIds);
-    const orderIds = [...body.orderIds];
+    const orderIds = [...new Set(body.orderIds)];
+    const ownedOrders = await db.order.count({
+      where: { id: { in: orderIds }, userId: user.id },
+    });
+    if (ownedOrders !== orderIds.length) {
+      return NextResponse.json({ error: "One or more orders were not found" }, { status: 404 });
+    }
+
+    const sessionId = createSession(orderIds, user.id);
 
     // Run verification in background
     (async () => {
@@ -72,13 +80,16 @@ export async function POST(request: NextRequest) {
 
 // GET /api/orders/verify-address/batch?sessionId=X — Poll progress
 export async function GET(request: NextRequest) {
+  const user = await requireAuth();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const url = new URL(request.url);
   const sessionId = url.searchParams.get("sessionId");
   if (!sessionId) {
     return NextResponse.json({ error: "Missing sessionId" }, { status: 400 });
   }
 
-  const progress = getProgress(sessionId);
+  const progress = getProgress(sessionId, user.id);
   if (!progress) {
     return NextResponse.json({ error: "Session not found" }, { status: 404 });
   }

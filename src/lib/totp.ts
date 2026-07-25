@@ -10,7 +10,6 @@ export function generateTOTPSecret(): string {
 
 export function getTOTPURI(username: string, secret: string): string {
   return generateURI({
-    strategy: "totp",
     secret,
     label: encodeURIComponent(username),
     issuer: APP_NAME,
@@ -26,11 +25,7 @@ export async function generateQRCodeDataURL(uri: string): Promise<string> {
 
 export function verifyTOTP(token: string, secret: string): boolean {
   try {
-    // otplib v13: verifySync returns a VerifyResult OBJECT ({ valid, ... }),
-    // never a bare boolean — the object is truthy even when valid:false, so we
-    // must read .valid explicitly. epochTolerance: 30s ≈ old window:1 drift.
-    const result = verifySync({ token, secret, epochTolerance: 30 });
-    return result.valid === true;
+    return verifySync({ token, secret }).valid;
   } catch {
     return false;
   }

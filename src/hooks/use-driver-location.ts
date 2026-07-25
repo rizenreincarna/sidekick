@@ -55,7 +55,9 @@ export function useDriverLocation(options?: Options) {
   const lastReportAtRef = useRef(0);
   const lastAcceptedRef = useRef<DriverFix | null>(null);
   const reportExtraRef = useRef(options?.reportExtra);
+  const reportRef = useRef(report);
   reportExtraRef.current = options?.reportExtra;
+  reportRef.current = report;
 
   const simulating = !!simulatePath && simulatePath.length >= 2;
 
@@ -67,7 +69,7 @@ export function useDriverLocation(options?: Options) {
       lastStateAtRef.current = now;
       setFix(next);
     }
-    if (!isSim && report && now - lastReportAtRef.current >= REPORT_INTERVAL_MS) {
+    if (!isSim && reportRef.current && now - lastReportAtRef.current >= REPORT_INTERVAL_MS) {
       lastReportAtRef.current = now;
       fetch("/api/driver/location", {
         method: "POST",
@@ -117,7 +119,7 @@ export function useDriverLocation(options?: Options) {
     const interval = window.setInterval(tick, 200);
     return () => window.clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, simulating, simulatePath, simulateSpeed]);
+  }, [enabled, simulating]);
 
   // --- Real GPS mode ---
   useEffect(() => {
@@ -190,7 +192,7 @@ export function useDriverLocation(options?: Options) {
       document.removeEventListener("visibilitychange", onVis);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, simulating, report]);
+  }, [enabled, simulating]);
 
   return { fix, fixRef, status, simulating };
 }

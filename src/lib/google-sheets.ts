@@ -45,11 +45,7 @@ export async function syncToSheet(orders: SheetOrder[], spreadsheetId: string, s
   const { google } = await import("googleapis");
 
   const credentials = JSON.parse(serviceAccountJson);
-  const auth = new google.auth.JWT({
-    email: credentials.client_email,
-    key: credentials.private_key,
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-  });
+  const auth = new google.auth.JWT({ email: credentials.client_email, key: credentials.private_key, scopes: ["https://www.googleapis.com/auth/spreadsheets"] });
 
   const sheets = google.sheets({ version: "v4", auth });
 
@@ -73,11 +69,7 @@ export async function importFromSheet(spreadsheetId: string, serviceAccountJson:
   const { google } = await import("googleapis");
 
   const credentials = JSON.parse(serviceAccountJson);
-  const auth = new google.auth.JWT({
-    email: credentials.client_email,
-    key: credentials.private_key,
-    scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
-  });
+  const auth = new google.auth.JWT({ email: credentials.client_email, key: credentials.private_key, scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"] });
 
   const sheets = google.sheets({ version: "v4", auth });
 

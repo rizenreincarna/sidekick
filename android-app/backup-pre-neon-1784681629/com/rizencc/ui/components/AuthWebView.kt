@@ -28,14 +28,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import com.rizencc.util.Constants
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun AuthWebView(
     url: String,
-    modifier: Modifier = Modifier,
-    injectBasicAuth: Boolean = true
+    modifier: Modifier = Modifier
 ) {
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -54,15 +52,11 @@ fun AuthWebView(
                     settings.databaseEnabled = true
                     settings.loadWithOverviewMode = true
                     settings.useWideViewPort = true
-                    settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                    settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
                     settings.userAgentString = settings.userAgentString + " RizenCC/2.0"
                     CookieManager.getInstance().setAcceptCookie(true)
-                    CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+                    CookieManager.getInstance().setAcceptThirdPartyCookies(this, false)
                     setBackgroundColor(cs.background.toArgb())
-
-                    if (injectBasicAuth) {
-                        setHttpAuthUsernamePassword("work.rizen.space", "", Constants.BASIC_USER, Constants.BASIC_PASS)
-                    }
 
                     webViewClient = object : WebViewClient() {
                         override fun onPageStarted(v: WebView?, u: String?, favicon: android.graphics.Bitmap?) {
@@ -73,10 +67,6 @@ fun AuthWebView(
                             loading = false
                         }
                         override fun shouldOverrideUrlLoading(v: WebView?, r: WebResourceRequest?) = false
-                        override fun onReceivedHttpAuthRequest(v: WebView?, h: HttpAuthHandler?, host: String?, realm: String?) {
-                            if (h != null && host == "work.rizen.space") h.proceed(Constants.BASIC_USER, Constants.BASIC_PASS)
-                            else h?.cancel()
-                        }
                         override fun onReceivedError(
                             view: WebView?,
                             request: WebResourceRequest?,

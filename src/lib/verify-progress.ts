@@ -1,8 +1,11 @@
-﻿// In-memory verification progress store
+﻿import { randomUUID } from "node:crypto";
+
+// In-memory verification progress store
 // Tracks batch address verification progress for polling
 
 export interface VerificationProgress {
   sessionId: string;
+  ownerId: string;
   total: number;
   done: number;
   status: "running" | "complete" | "error";
@@ -40,11 +43,12 @@ function cleanup() {
   }
 }
 
-export function createSession(orderIds: string[]): string {
+export function createSession(orderIds: string[], ownerId: string): string {
   cleanup();
-  const sessionId = `verify_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const sessionId = `verify_${randomUUID()}`;
   sessions.set(sessionId, {
     sessionId,
+    ownerId,
     total: orderIds.length,
     done: 0,
     status: "running",
@@ -88,8 +92,9 @@ export function updateProgress(
   }
 }
 
-export function getProgress(sessionId: string): VerificationProgress | null {
-  return sessions.get(sessionId) || null;
+export function getProgress(sessionId: string, ownerId: string): VerificationProgress | null {
+  const session = sessions.get(sessionId);
+  return session?.ownerId === ownerId ? session : null;
 }
 
 export function completeSession(sessionId: string): void {

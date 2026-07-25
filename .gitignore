@@ -56,3 +56,12 @@ secrets/
 upload/extracted
 *.db-shm
 *.db-wal
+*.db
+*.db.*
+*.sqlite
+*.sqlite3
+*.keystore
+*.jks
+keystore.properties
+/db/
+/custom.db

@@ -1,0 +1,22 @@
+cliArgs:
+  geometry: true       # retrieve geometry (-g)
+  planmode: false
+  threads: 2
+  explore: 5
+  limit: '1mb'
+  logdir: '/conf'
+  logsize: '100M'
+  maxlocations: 1000
+  maxvehicles: 10
+  override: true
+  path: ''
+  port: 3000
+  router: 'osrm'
+  timeout: 30000
+  baseurl: '/'
+
+routingServers:
+  osrm:
+    car:
+      host: 'osrm'
+      port: '5000'

@@ -85,6 +85,12 @@ export default function NavigationClient() {
   const [follow, setFollow] = useState(true);
   const [overviewRequest, setOverviewRequest] = useState(0);
   const [startingRoute, setStartingRoute] = useState(false);
+  const [mapStyle, setMapStyle] = useState<"dark" | "light">(() => {
+    if (typeof window !== "undefined") {
+      return (localStorage.getItem("sidekick-map-style") as "dark" | "light") || "dark";
+    }
+    return "dark";
+  });
 
   // -------------------------------------------------------------------------
   // Load the saved route for this date
@@ -141,9 +147,18 @@ export default function NavigationClient() {
         .filter(([, v]) => v.completed)
         .map(([orderId]) => orderId)
     );
-    const { targets, warnings } = buildNavigationTargets(route.routeData, { completedOrderIds });
-    setNavWarnings(warnings);
+    const { targets } = buildNavigationTargets(route.routeData, { completedOrderIds });
     return targets;
+  }, [route, tokens]);
+
+  // Sync warnings outside the memo (setState in useMemo can loop)
+  useEffect(() => {
+    if (!route) return;
+    const completedOrderIds = new Set(
+      Object.entries(tokens).filter(([, v]) => v.completed).map(([orderId]) => orderId)
+    );
+    const { warnings } = buildNavigationTargets(route.routeData, { completedOrderIds });
+    setNavWarnings(warnings);
   }, [route, tokens]);
 
   const targets = useMemo(
@@ -156,7 +171,10 @@ export default function NavigationClient() {
     if (phase !== "confirm" || targets.length === 0) return;
     const session = loadNavSession();
     if (session && session.date === date && session.activeTargetIndex > 0) {
-      setResumeIndex(session.activeTargetIndex);
+      const completedBeforeResume = targets
+        .slice(0, session.activeTargetIndex)
+        .filter((target) => target.completed).length;
+      setResumeIndex(Math.max(0, session.activeTargetIndex - completedBeforeResume));
     } else {
       setResumeIndex(null);
     }
@@ -236,23 +254,33 @@ export default function NavigationClient() {
   }, [phase, simulate, date]);
 
   // Persist route status as COMPLETED when the engine finishes the route.
+  const completionDoneRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    if (engine.status !== "completed") return;
+    if (engine.status !== "completed" || engine.completedBySkipping) return;
     clearNavSession();
     if (!route || route.status === "COMPLETED") return;
-    (async () => {
-      try {
-        await fetch("/api/route/save", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ date, routeData: route.routeData, status: "COMPLETED" }),
-        });
-        setRoute((r) => (r ? { ...r, status: "COMPLETED" } : r));
-      } catch {
-        // Non-blocking: the DB may briefly lag, but the driver already sees the completion screen.
+    const key = `${date}-${route.status}`;
+    if (completionDoneRef.current.has(key)) return;
+    completionDoneRef.current.add(key);
+
+    const saveWithRetry = async (retries = 3, delay = 2000) => {
+      for (let i = 0; i <= retries; i++) {
+        try {
+          const res = await fetch("/api/route/save", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ date, routeData: route.routeData, status: "COMPLETED" }),
+          });
+          if (res.ok) {
+            setRoute((r) => (r ? { ...r, status: "COMPLETED" as const } : r));
+            return;
+          }
+        } catch { /* retry */ }
+        if (i < retries) await new Promise((r) => setTimeout(r, delay * Math.pow(2, i)));
       }
-    })();
-  }, [engine.status, route, date]);
+    };
+    saveWithRetry();
+  }, [engine.status, engine.completedBySkipping, route, date]);
 
   // -------------------------------------------------------------------------
   // Actions
@@ -575,6 +603,8 @@ export default function NavigationClient() {
         onFollowChange={setFollow}
         overviewRequest={overviewRequest}
         initialCenter={initialCenter}
+        mapStyle={mapStyle}
+        onMapStyleChange={(s) => { setMapStyle(s); localStorage.setItem("sidekick-map-style", s); }}
       />
 
       {/* Top: maneuver card + warnings */}
@@ -589,6 +619,7 @@ export default function NavigationClient() {
           offRoute={engine.offRoute}
           rerouting={engine.status === "rerouting"}
           offline={engine.leg?.offline ?? false}
+          etaMs={engine.etaMs}
         />
         {(engine.status === "requesting-directions") && (
           <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-[#0b1417]/95 px-4 py-2.5 text-sm text-[#c9d9d6] backdrop-blur-md">
@@ -611,7 +642,8 @@ export default function NavigationClient() {
         )}
         {gpsStatus === "denied" && (
           <div className="rounded-xl border border-destructive/40 bg-destructive/15 px-4 py-2.5 text-xs text-destructive backdrop-blur-md">
-            GPS permission denied — enable location for accurate guidance.
+            GPS permission denied — enable location in your browser settings
+            or use the Android app for background GPS tracking.
           </div>
         )}
         {simulate && (

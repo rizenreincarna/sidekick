@@ -3,6 +3,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { db } from "./db";
 import { verifyTOTP } from "./totp";
+import { decryptSecret } from "./secrets";
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -48,7 +49,7 @@ export const authOptions: NextAuthOptions = {
             // 2FA code not provided — return null (client should check via /api/auth/check-2fa first)
             return null;
           }
-          const isValidTOTP = verifyTOTP(totpCode, user.twoFactorSecret);
+          const isValidTOTP = verifyTOTP(totpCode, decryptSecret(user.twoFactorSecret));
           if (!isValidTOTP) {
             return null;
           }

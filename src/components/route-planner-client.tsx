@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
@@ -10,7 +10,6 @@ import { Input } from "@/components/ui/input";
 import RouteSummaryPanel from "@/components/route-summary-panel";
 import { FIXED_LOCATIONS } from "@/lib/route-model";
 import type { OptimizedRouteResult, VroomStopDetail } from "@/lib/vroom";
-import { reorderStopsInLoad, reverseStopsInLoad, recalculateRouteTotals } from "@/lib/vroom";
 
 // Three.js uses window/document — MUST be imported with ssr: false.
 const RouteMap3D = dynamic(() => import("@/components/route-map-3d"), {
@@ -35,12 +34,22 @@ export default function RoutePlannerClient() {
   const [panelOpen, setPanelOpen] = useState(true);
   const [trackingTokens, setTrackingTokens] = useState<Record<string, { token: string; completed: boolean }>>({});
   const [heroProfile, setHeroProfile] = useState<{ heroName: string; plateNumber: string; vehicleColor: string; vehicleModel: string; homeLatitude?: number | null; homeLongitude?: number | null } | null>(null);
-  const [driverPosition, setDriverPosition] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [driverPosition, setDriverPosition] = useState<{ latitude: number; longitude: number; heading?: number | null } | null>(null);
   const [customRoutePath, setCustomRoutePath] = useState<[number, number][] | null>(null);
+  const [mapStyle, setMapStyle] = useState<"dark" | "light">(() => {
+    if (typeof window !== "undefined") {
+      return (localStorage.getItem("sidekick-map-style") as "dark" | "light") || "dark";
+    }
+    return "dark";
+  });
+
+  // Monotonic request id: only the latest road-path / load request may write state.
+  const routeReqId = useRef(0);
 
   // Fetch road-following OSRM geometry for the VROOM-ordered route and update
   // the map overlay. Falls back to null (straight-line stops) if OSRM fails.
-  const fetchRoadPathForRoute = useCallback(async (routeData: OptimizedRouteResult) => {
+  const fetchRoadPathForRoute = useCallback(async (routeData: OptimizedRouteResult, reqId?: number) => {
+    const isLatest = () => reqId === undefined || reqId === routeReqId.current;
     try {
       const waypoints: { lat: number; lng: number }[] = [];
       // Start from home
@@ -60,7 +69,7 @@ export default function RoutePlannerClient() {
         waypoints.push({ lat: FIXED_LOCATIONS.HOME.latitude, lng: FIXED_LOCATIONS.HOME.longitude });
       }
       if (waypoints.length < 2) {
-        setCustomRoutePath(null);
+        if (isLatest()) setCustomRoutePath(null);
         return;
       }
       const res = await fetch("/api/navigation/route", {
@@ -69,30 +78,35 @@ export default function RoutePlannerClient() {
         body: JSON.stringify({ waypoints }),
       });
       if (!res.ok) {
-        setCustomRoutePath(null);
+        if (isLatest()) setCustomRoutePath(null);
         return;
       }
       const data = await res.json();
+      if (!isLatest()) return;
       if (data.path && data.path.length >= 2) {
         setCustomRoutePath(data.path as [number, number][]);
       } else {
         setCustomRoutePath(null);
       }
     } catch {
-      setCustomRoutePath(null);
+      if (isLatest()) setCustomRoutePath(null);
     }
   }, [heroProfile]);
 
   // Load any saved route for the selected date
   const loadSaved = useCallback(async (d: string) => {
+    const reqId = ++routeReqId.current;
+    const isLatest = () => reqId === routeReqId.current;
     try {
       const res = await fetch(`/api/route/preview?date=${d}`, { cache: "no-store" });
+      if (!isLatest()) return;
       if (res.ok) {
         const data = await res.json();
+        if (!isLatest()) return;
         if (data.route) {
           setRoute(data.route.routeData);
           setRouteStatus(data.route.status);
-          fetchRoadPathForRoute(data.route.routeData);
+          fetchRoadPathForRoute(data.route.routeData, reqId);
           // Pre-fetch map tiles for the route area (fire-and-forget)
           const rd = data.route.routeData;
           if (rd?.loads?.length) {
@@ -114,8 +128,10 @@ export default function RoutePlannerClient() {
           }
           // Load tracking tokens for this date
           const trackRes = await fetch(`/api/route/track-tokens?date=${d}`, { cache: "no-store" });
+          if (!isLatest()) return;
           if (trackRes.ok) {
             const trackData = await trackRes.json();
+            if (!isLatest()) return;
             if (trackData.tokens) setTrackingTokens(trackData.tokens);
           }
           return;
@@ -124,6 +140,7 @@ export default function RoutePlannerClient() {
       setRoute(null);
       setRouteStatus("OPTIMIZED");
       setTrackingTokens({});
+      setCustomRoutePath(null);
     } catch {
       /* ignore */
     }
@@ -141,23 +158,26 @@ export default function RoutePlannerClient() {
     loadSaved(date);
   }, [date, loadSaved]);
 
-  const optimize = async (forceDropOffs?: ("DROP_A" | "DROP_B" | undefined)[]) => {
+  const optimize = async () => {
+    const reqId = ++routeReqId.current;
     setLoading(true);
     setError(null);
     try {
       const res = await fetch("/api/route/optimize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date, forceDropOffs }),
+        body: JSON.stringify({ date }),
       });
       const data = await res.json();
       if (!res.ok) {
         setError(data.error || "Optimization failed");
         setRoute(null);
       } else {
-        setRoute(data.route);
-        setRouteStatus("OPTIMIZED");
-        fetchRoadPathForRoute(data.route);
+        if (reqId === routeReqId.current) {
+          setRoute(data.route);
+          setRouteStatus("OPTIMIZED");
+          fetchRoadPathForRoute(data.route, reqId);
+        }
         // Pre-fetch map tiles for the route area (fire-and-forget, runs in background)
         if (data.route?.loads?.length) {
           const allStops = data.route.loads.flatMap((l) => l.stops);
@@ -248,11 +268,15 @@ export default function RoutePlannerClient() {
     let lastSent = 0;
 
     const sendPos = (pos: GeolocationPosition) => {
-      // Throttle to every 5s max (watchPosition can fire rapidly)
       const now = Date.now();
       if (now - lastSent < 5000) return;
       lastSent = now;
       setGpsStatus("active");
+      setDriverPosition({
+        latitude: pos.coords.latitude,
+        longitude: pos.coords.longitude,
+        heading: pos.coords.heading,
+      });
       fetch("/api/driver/location", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -355,6 +379,93 @@ export default function RoutePlannerClient() {
     setSelectedOrderId((prev) => (prev === stop.orderId ? null : stop.orderId));
   }, []);
 
+  // Call OSRM for road-following path + distance/duration for modified route.
+  // Used by reverse, reorder, and drop-toggle to recalculate after manual edits.
+  const recalcRoutePath = useCallback(async (updated: OptimizedRouteResult) => {
+    try {
+      const waypoints: { lat: number; lng: number }[] = [];
+      if (heroProfile?.homeLatitude != null && heroProfile?.homeLongitude != null) {
+        waypoints.push({ lat: heroProfile.homeLatitude, lng: heroProfile.homeLongitude });
+      } else {
+        waypoints.push({ lat: FIXED_LOCATIONS.HOME.latitude, lng: FIXED_LOCATIONS.HOME.longitude });
+      }
+      for (const load of updated.loads) {
+        for (const stop of load.stops) {
+          waypoints.push({ lat: stop.latitude, lng: stop.longitude });
+        }
+        const drop = load.dropOff === "DROP_B" ? FIXED_LOCATIONS.DROP_B : FIXED_LOCATIONS.DROP_A;
+        waypoints.push({ lat: drop.latitude, lng: drop.longitude });
+      }
+      if (waypoints.length < 2) return updated;
+      const res = await fetch("/api/navigation/route", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ waypoints }),
+      });
+      if (!res.ok) return updated;
+      const data = await res.json();
+      if (data.path) {
+        setCustomRoutePath(data.path as [number, number][]);
+      }
+      if (typeof data.distanceMeters === "number" && typeof data.durationSeconds === "number") {
+        return { ...updated,
+          totalDistanceMeters: data.distanceMeters,
+          totalDurationSeconds: data.durationSeconds,
+        };
+      }
+    } catch { /* keep existing route if OSRM fails */ }
+    return updated;
+  }, [heroProfile]);
+
+  // Toggle drop-off point for a load (DROP_A ⇄ DROP_B). Re-optimizes with force.
+  const onToggleDropOff = useCallback(async (loadIndex: number, newDrop: "DROP_A" | "DROP_B") => {
+    if (!route || !date) return;
+    setLoading(true);
+    try {
+      const forceDropOffs: ("DROP_A" | "DROP_B")[] = route.loads.map((l, i) =>
+        i === loadIndex ? newDrop : l.dropOff
+      );
+      const res = await fetch("/api/route/optimize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date, forceDropOffs }),
+      });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      if (data.route) {
+        const recalc = await recalcRoutePath(data.route);
+        setRoute(recalc);
+        setRouteStatus("OPTIMIZED");
+      }
+    } catch {
+      setError("Failed to switch drop-off point. Try again.");
+    } finally {
+      setLoading(false);
+    }
+  }, [route, date, fetchRoadPathForRoute]);
+
+  // Reverse the stop order within a load, then recalculate via OSRM.
+  const onReverseLoad = useCallback((loadIndex: number) => {
+    if (!route) return;
+    const updated = { ...route, loads: route.loads.map((l, i) =>
+      i === loadIndex ? { ...l, stops: [...l.stops].reverse() } : l
+    ) };
+    recalcRoutePath(updated).then(setRoute);
+  }, [route, recalcRoutePath]);
+
+  // Drag-and-drop reorder within a load, then recalculate via OSRM.
+  const onReorderStops = useCallback((loadIndex: number, fromIndex: number, toIndex: number) => {
+    if (!route) return;
+    const updated = { ...route, loads: route.loads.map((l, i) => {
+      if (i !== loadIndex) return l;
+      const stops = [...l.stops];
+      const [moved] = stops.splice(fromIndex, 1);
+      stops.splice(toIndex, 0, moved);
+      return { ...l, stops };
+    } ) };
+    recalcRoutePath(updated).then(setRoute);
+  }, [route, recalcRoutePath]);
+
   return (
     <div className="flex h-dvh flex-col bg-background text-foreground">
       {/* Header — matches main app brand row */}
@@ -412,7 +523,7 @@ export default function RoutePlannerClient() {
               className="h-9 w-[150px] border-white/10 bg-white/5 text-sm text-foreground"
             />
             <Button
-              onClick={() => optimize()}
+              onClick={optimize}
               disabled={loading}
               size="sm"
               className="gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90"
@@ -470,6 +581,8 @@ export default function RoutePlannerClient() {
               routeStatus={routeStatus}
               trackingTokens={trackingTokens}
               customRoutePath={customRoutePath ?? undefined}
+              mapStyle={mapStyle}
+              onMapStyleChange={(s) => { setMapStyle(s); localStorage.setItem("sidekick-map-style", s); }}
             />
           ) : (
             <div className="flex h-full w-full flex-col items-center justify-center bg-background text-center text-muted-foreground">
@@ -496,35 +609,15 @@ export default function RoutePlannerClient() {
               onSelectStop={onSelectStop}
               onSaveRoute={() => saveRoute()}
               onStartRoute={startAndNavigate}
+              onToggleDropOff={onToggleDropOff}
+              onReverseLoad={onReverseLoad}
+              onReorderStops={onReorderStops}
               saving={saving}
               routeStatus={routeStatus}
               trackingTokens={trackingTokens}
               routeDate={date}
               onMarkComplete={markComplete}
               onUndoComplete={undoComplete}
-              onToggleDropOff={async (loadIndex, dropOff) => {
-                if (!route) return;
-                const forceDropOffs = route.loads.map((l, i) =>
-                  i === loadIndex ? dropOff : l.dropOff
-                );
-                await optimize(forceDropOffs);
-              }}
-              onReorderStops={(loadIndex, fromIndex, toIndex) => {
-                if (!route) return;
-                const newLoads = [...route.loads];
-                newLoads[loadIndex] = reorderStopsInLoad(newLoads[loadIndex], fromIndex, toIndex, heroProfile?.homeLatitude && heroProfile?.homeLongitude ? { latitude: heroProfile.homeLatitude, longitude: heroProfile.homeLongitude } : undefined);
-                const updated = recalculateRouteTotals({ ...route, loads: newLoads });
-                setRoute(updated);
-                fetchRoadPathForRoute(updated);
-              }}
-              onReverseLoad={(loadIndex) => {
-                if (!route) return;
-                const newLoads = [...route.loads];
-                newLoads[loadIndex] = reverseStopsInLoad(newLoads[loadIndex], heroProfile?.homeLatitude && heroProfile?.homeLongitude ? { latitude: heroProfile.homeLatitude, longitude: heroProfile.homeLongitude } : undefined);
-                const updated = recalculateRouteTotals({ ...route, loads: newLoads });
-                setRoute(updated);
-                fetchRoadPathForRoute(updated);
-              }}
             />
           </aside>
         )}

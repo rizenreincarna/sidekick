@@ -1,9 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
+import { checkRateLimit, clientKeyFromRequest } from "@/lib/rate-limit";
 
 export async function POST(request: NextRequest) {
   try {
+    const rlKey = clientKeyFromRequest(request);
+    const rl = checkRateLimit("register", rlKey, 5, 15 * 60_000);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: "Too many registration attempts. Please try again later." },
+        { status: 429, headers: { "Retry-After": String(rl.retryAfterSeconds) } }
+      );
+    }
     const body = await request.json();
     const { username, password, displayName } = body;
 
@@ -28,9 +37,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (password.length < 4) {
+    if (typeof password !== "string" || password.length < 12) {
       return NextResponse.json(
-        { error: "Password must be at least 4 characters" },
+        { error: "Password must be at least 12 characters" },
         { status: 400 }
       );
     }

@@ -446,7 +446,7 @@ You can help with:
 
     // Parse and create actions if any
     const actions = parseAiActions(result.content);
-    const createdActions: { id: string; actionType: string; description: string; status: string }[] = [];
+    const createdActions: Array<{ id: string; actionType: string; description: string; status: string }> = [];
     for (const action of actions) {
       const dbAction = await db.aiAction.create({
         data: {

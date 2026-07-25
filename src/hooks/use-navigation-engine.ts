@@ -64,8 +64,8 @@ interface EngineOptions {
 }
 
 const OFF_ROUTE_THRESHOLD_M = 40;
-const OFF_ROUTE_SUSTAIN_MS = 4000;
-const REROUTE_COOLDOWN_MS = 15000;
+const OFF_ROUTE_SUSTAIN_MS = 2000;
+const REROUTE_COOLDOWN_MS = 8000;
 const ARRIVAL_RADIUS_M = 35;
 const ARRIVAL_RADIUS_MAX_ACCURACY_M = 60; // auto-arrive only with decent accuracy
 const SLOW_ARRIVAL_RADIUS_M = 80;
@@ -93,6 +93,7 @@ export function useNavigationEngine(options: EngineOptions) {
   const [etaMs, setEtaMs] = useState<number | null>(null);
   const [offRoute, setOffRoute] = useState(false);
   const [progressMeters, setProgressMeters] = useState(0);
+  const [completedBySkipping, setCompletedBySkipping] = useState(false);
 
   const legRef = useRef<NavLeg | null>(null);
   const positionRef = useRef<DriverFix | null>(null);
@@ -434,6 +435,10 @@ export function useNavigationEngine(options: EngineOptions) {
       if (distToTarget <= ARRIVAL_RADIUS_M && accuracyOk) {
         arrivedNow = true;
       } else if (
+        // Slow-arrival fallback still requires a trustworthy fix: use the same
+        // accuracy guard as the tight-radius branch so an inaccurate stationary
+        // fix (e.g. indoors) cannot auto-trigger arrival.
+        accuracyOk &&
         distToTarget <= SLOW_ARRIVAL_RADIUS_M &&
         (position.speed === null || position.speed < SLOW_ARRIVAL_SPEED_MPS)
       ) {
@@ -466,6 +471,7 @@ export function useNavigationEngine(options: EngineOptions) {
       (t) => !t.completed && !nextCompleted.has(t.id) && !skippedIdsRef.current.has(t.id)
     );
     if (remaining.length === 0) {
+      setCompletedBySkipping(false);
       setStatus("completed");
       speakRef.current("Route complete. Great work!", { force: true });
       return;
@@ -489,6 +495,7 @@ export function useNavigationEngine(options: EngineOptions) {
       (t) => !t.completed && !completedIdsRef.current.has(t.id) && !nextSkipped.has(t.id)
     );
     if (remaining.length === 0) {
+      setCompletedBySkipping(true);
       setStatus("completed");
       return;
     }
@@ -529,6 +536,7 @@ export function useNavigationEngine(options: EngineOptions) {
     etaMs,
     offRoute,
     progressMeters,
+    completedBySkipping,
     confirmActiveTargetComplete,
     skipActiveTarget,
     retryLeg,

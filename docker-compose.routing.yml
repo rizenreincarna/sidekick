@@ -1,0 +1,73 @@
+# Self-hosted routing stack for HERO Sidekick.
+# OSRM (Klang Valley graph) + VROOM, bound to loopback only, with resource caps.
+#
+# Start:  docker compose -f docker-compose.routing.yml up -d
+# Logs:   docker compose -f docker-compose.routing.yml logs -f
+# Stop:   docker compose -f docker-compose.routing.yml down
+#
+# Dataset: /root/osrm-data/klang-valley.osrm (see scripts/setup-osrm-malaysia.sh)
+
+services:
+  osrm:
+    image: osrm/osrm-backend@sha256:af5d4a83fb90086a43b1ae2ca22872e6768766ad5fcbb07a29ff90ec644ee409
+    container_name: osrm
+    command: osrm-routed --algorithm mld /data/klang-valley.osrm
+    ports:
+      - "127.0.0.1:5000:5000"
+    volumes:
+      - /root/osrm-data:/data:ro
+    restart: unless-stopped
+    networks:
+      - route-net
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 3G
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+    healthcheck:
+      # The osrm-backend image has no curl/wget; use bash /dev/tcp for a port probe.
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/127.0.0.1/5000"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  vroom:
+    image: ghcr.io/vroom-project/vroom-docker:v1.14.0
+    container_name: vroom
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - ./vroom.config.yml:/conf/config.yml:ro
+    restart: unless-stopped
+    networks:
+      - route-net
+    depends_on:
+      - osrm
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
+    healthcheck:
+      # The vroom image ships curl.
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:3000/health > /dev/null || exit 1"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+networks:
+  route-net:
+    name: route-net
+    external: true
