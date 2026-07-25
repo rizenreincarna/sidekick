@@ -7,15 +7,15 @@
 module.exports = {
   apps: [
     {
-      name: "sidekick-dev",
+      name: "sidekick-app",
       script: ".next/standalone/server.js",
-      cwd: "/root/sidekick-dev",
+      cwd: "/root/my-app",
       instances: 1,
       exec_mode: "fork",
       watch: false,
       env: {
         NODE_ENV: "production",
-        PORT: 3002,
+        PORT: 3001,
         HOSTNAME: "127.0.0.1",
       },
       max_memory_restart: "750M",
