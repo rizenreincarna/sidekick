@@ -186,7 +186,6 @@ function getWhatsAppLink(order: Order, template?: string, phonePrefix?: string):
 // ============ CHANGELOG ============
 const CHANGELOG = [
   {
-<<<<<<< HEAD
     version: "v1.27",
     date: "24 Jul 2026",
     title: "Smart Drop-Point Selection & Route Editor",
@@ -202,8 +201,6 @@ const CHANGELOG = [
     ],
   },
   {
-=======
->>>>>>> 9d1a14e485bad105ffdfc9c784d5d5c0cc7252cb
     version: "v1.26",
     date: "Jul 2026",
     title: "Android: Pull-to-Refresh Fix & Settings Changelog",
