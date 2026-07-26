@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { db } from "./db";
 import { verifyTOTP } from "./totp";
 import { decryptSecret } from "./secrets";
+import { checkRateLimit } from "./rate-limit";
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -16,6 +17,16 @@ export const authOptions: NextAuthOptions = {
       },
       async authorize(credentials) {
         if (!credentials?.username || !credentials?.password) {
+          return null;
+        }
+
+        const loginLimit = checkRateLimit(
+          "login",
+          String(credentials.username).trim().toLowerCase(),
+          10,
+          15 * 60_000
+        );
+        if (!loginLimit.allowed) {
           return null;
         }
 

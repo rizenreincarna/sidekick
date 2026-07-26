@@ -50,7 +50,7 @@ export async function PATCH(
       auditDetails.isApproved = isApproved;
     }
     
-    if (password && password.length >= 4) {
+    if (password && password.length >= 12) {
       if (password.length > 100) {
         return NextResponse.json({ error: "Password must be 100 characters or less." }, { status: 400 });
       }
