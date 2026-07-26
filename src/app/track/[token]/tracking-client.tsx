@@ -233,6 +233,19 @@ export function TrackingClient({ token }: { token: string }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   [data?.heroName, data?.plateNumber, data?.vehicleColor, data?.vehicleModel]);
 
+  // Stabilize customRoutePath the same way as `route` above: the API returns a
+  // freshly-parsed array on every 5s poll, and a new reference would tear down
+  // and rebuild the entire Three.js scene (drones/clouds/orb jump).
+  // The API anchors routePath at the first PENDING stop (not the moving
+  // driver), so geometry only changes when a stop completes. Key on the set of
+  // uncompleted stops (stopsKey encodes completion) plus point count, so the
+  // scene rebuilds exactly when the route actually changes — not on every poll.
+  const rp = data?.routePath;
+  const routePathKey = rp && rp.length > 0 ? `${stopsKey}:${rp.length}` : "none";
+  const stableRoutePath = useMemo(() => rp ?? null,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [routePathKey]);
+
   const myStop = data?.mapStops?.find(s => s.isMine);
   const state: TrackState = !data || data.error ? "scheduled"
     : data.status === "completed" ? "completed"
@@ -325,7 +338,9 @@ export function TrackingClient({ token }: { token: string }) {
                 : state === "stopped"
                   ? `⚠ Driver has paused live tracking. They may be switching apps or handling an issue. Your pickup is still scheduled — please wait. `
                 : state === "live" && data?.eta
-                  ? `${data.eta.minutes} min estimated arrival • ${data.eta.distanceKm} km away • Stop ${stop} of ${total} • Driver is on the way to ${data?.customerName || "your pickup"}. `
+                  ? data.eta.stopsBefore && data.eta.stopsBefore > 0
+                    ? `${data.eta.minutes} min estimated arrival • ${data.eta.distanceKm} km away • Stop ${stop} of ${total} • Driver is completing ${data.eta.stopsBefore} pickup${data.eta.stopsBefore === 1 ? "" : "s"} before yours. `
+                    : `${data.eta.minutes} min estimated arrival • ${data.eta.distanceKm} km away • Stop ${stop} of ${total} • Driver is on the way to ${data?.customerName || "your pickup"}. `
                   : `Pickup scheduled for ${data?.routeDate || "today"}${plannedDate ? ` at ${formatMY(plannedDate)}` : ""} • Stop ${stop} of ${total} • Live driver location will appear once the route starts. `;
               return (
                 <div className="nc-ticker" role="status" aria-live="polite" style={state === "stopped" ? { borderColor: "rgba(251,113,133,0.35)" } : undefined}>
@@ -371,7 +386,7 @@ export function TrackingClient({ token }: { token: string }) {
                     customerOrderId={customerOrderId}
                     selectedOrderId={customerOrderId}
                     etaInfo={data?.eta ?? null}
-                    customRoutePath={data?.routePath ?? null}
+                    customRoutePath={stableRoutePath}
                     followDriver={followDriver && state === "live"}
                     mapStyle={mapStyle}
                     onMapStyleChange={(s) => { setMapStyle(s); localStorage.setItem("sidekick-map-style", s); }}

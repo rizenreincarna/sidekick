@@ -197,16 +197,40 @@ export async function GET(
       [link.latitude, link.longitude],
     ];
 
-    // Try OSRM for accurate road-based travel time AND geometry
+    // Try OSRM for accurate road-based travel time AND geometry.
+    // Two coordinate sets:
+    //  - coords (driver-anchored) → live ETA/distance, recomputed every poll.
+    //  - pathCoords (anchored at first pending stop) → STABLE map geometry that
+    //    only changes when a stop completes, so the client 3D scene doesn't
+    //    tear down and rebuild on every 5s poll (the vehicle orb position is
+    //    driven separately by driverPosition).
     let travelDuration = 0;
     let travelDistance = 0;
-    const osrmResult = await osrmRoute(coords);
+    const pathCoords: [number, number][] = [
+      ...uncompletedBefore.map((s) => [s.latitude, s.longitude] as [number, number]),
+      [link.latitude, link.longitude],
+    ];
+    const needsStableGeometry = uncompletedBefore.length >= 1;
+    const [osrmResult, osrmPathResult] = await Promise.all([
+      osrmRoute(coords),
+      needsStableGeometry && pathCoords.length >= 2 ? osrmRoute(pathCoords) : Promise.resolve(null),
+    ]);
     if (osrmResult) {
       travelDuration = osrmResult.duration;
       travelDistance = osrmResult.distance;
-      routePath = osrmResult.path.length >= 2 ? osrmResult.path : coords;
+    }
+    if (uncompletedBefore.length === 0) {
+      // Driver is heading directly to this customer (no stops before theirs).
+      // A driver-anchored line would go stale the moment it's drawn (driver
+      // moves every poll) and a frozen chord looks buggy under the moving orb —
+      // so emit no route line here; the orb + destination marker carry the UI.
+      routePath = [];
+    } else if (osrmPathResult && osrmPathResult.path.length >= 2) {
+      routePath = osrmPathResult.path;
     } else {
-      routePath = coords;
+      routePath = pathCoords.length >= 2 ? pathCoords : coords;
+    }
+    if (!osrmResult) {
       // Fallback: sum haversine distances between consecutive stops
       for (let i = 0; i < coords.length - 1; i++) {
         const leg = haversineEta(coords[i], coords[i + 1]);

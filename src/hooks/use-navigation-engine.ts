@@ -398,12 +398,24 @@ export function useNavigationEngine(options: EngineOptions) {
           speakRef.current(toManeuver > 200 ? `In ${distText}, ${step.voiceInstruction}` : step.voiceInstruction);
         }
       } else {
-        if (!announced.near300 && toManeuver <= 300 && toManeuver > 100 && step.maneuverType !== "arrive" && step.maneuverType !== "depart") {
+        // Speed-aware triggers: lead the maneuver by travel time, not just a
+        // fixed distance, so the cue lands ahead of it even at speed. GPS
+        // fixes and React state are throttled, so raw 300/100 m gates fire
+        // late when moving fast — scale the trigger distance with speed.
+        const speed = position.speed && position.speed > 0 ? position.speed : 0;
+        const near300Gate = Math.max(300, speed * 12);
+        const near100Gate = Math.max(100, speed * 6);
+        if (!announced.near300 && toManeuver <= near300Gate && toManeuver > near100Gate && step.maneuverType !== "arrive" && step.maneuverType !== "depart") {
           announcedRef.current.near300 = true;
-          speakRef.current(`In 300 meters, ${step.voiceInstruction}`);
+          // Speak the live (rounded) distance instead of a hardcoded "300 meters"
+          // so the audio matches what the maneuver card shows.
+          speakRef.current(`In ${formatDistance(toManeuver)}, ${step.voiceInstruction}`);
         }
-        if (!announced.near100 && toManeuver <= 100 && step.maneuverType !== "arrive" && step.maneuverType !== "depart") {
+        if (!announced.near100 && toManeuver <= near100Gate && step.maneuverType !== "arrive" && step.maneuverType !== "depart") {
           announcedRef.current.near100 = true;
+          // No force: on short steps the entry cue already spoke this identical
+          // instruction moments ago, and the 4s dedupe in speak() must suppress
+          // the repeat. Forcing would cancel-restart the utterance mid-word.
           speakRef.current(step.voiceInstruction);
         }
       }

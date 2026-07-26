@@ -1,0 +1,50 @@
+[
+  {
+    "type": "payment",
+    "amount": 5,
+    "note": "26087 Kuala Lumpur",
+    "seq": 1
+  },
+  {
+    "type": "received",
+    "amount": 35,
+    "note": "26087 - pickup fee",
+    "seq": 2
+  },
+  {
+    "type": "payment",
+    "amount": 40,
+    "note": "26076 Kuala Lumpur",
+    "seq": 3
+  },
+  {
+    "type": "payment",
+    "amount": 47,
+    "note": "26094 Cheras",
+    "seq": 4
+  },
+  {
+    "type": "payment",
+    "amount": 110,
+    "note": "26062 Kuala Lumpur",
+    "seq": 5
+  },
+  {
+    "type": "payment",
+    "amount": 20,
+    "note": "26072 Kuala Lumpur",
+    "seq": 6
+  },
+  {
+    "type": "payment",
+    "amount": 20,
+    "note": "26103 - Subang Jaya",
+    "seq": 7
+  },
+  {
+    "type": "payment",
+    "amount": 85,
+    "note": "26082 Kuala Lumpur",
+    "seq": 8
+  }
+]

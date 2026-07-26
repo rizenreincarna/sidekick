@@ -1339,14 +1339,14 @@ export function SettingsTab({ holidays, onRefresh, session, onReplayOnboarding, 
         <button onClick={() => toggleSection("changelog")} className="w-full flex items-center justify-between p-4 text-left hover:bg-white/5 transition-colors">
           <h3 className="font-semibold flex items-center gap-2"><History className="h-5 w-5 text-primary" />Changelog</h3>
           <div className="flex items-center gap-2">
-            <Badge variant="outline" className="text-[0.625rem] border-primary/30 text-primary px-2 py-0">v1.27</Badge>
+            <Badge variant="outline" className="text-[0.625rem] border-primary/30 text-primary px-2 py-0">v1.28</Badge>
             <ChevronRight className={`h-4 w-4 text-muted-foreground transition-transform ${openSections.has("changelog") ? "rotate-90" : ""}`} />
           </div>
         </button>
         {openSections.has("changelog") && (
           <div className="px-4 pb-4 border-t border-white/5">
             <div className="pt-3 mb-4">
-              <p className="text-xs text-muted-foreground">Track what's new in HERO Sidekick. Current version: <span className="text-primary font-semibold">v1.27</span></p>
+              <p className="text-xs text-muted-foreground">Track what's new in HERO Sidekick. Current version: <span className="text-primary font-semibold">v1.28</span></p>
             </div>
             <div className="space-y-4">
               {CHANGELOG.map((entry, idx) => (

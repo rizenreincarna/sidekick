@@ -35,7 +35,7 @@ interface Options {
 }
 
 const REPORT_INTERVAL_MS = 10_000;
-const STATE_THROTTLE_MS = 750;
+const STATE_THROTTLE_MS = 400;
 const MAX_ACCEPTED_ACCURACY_M = 150;
 const JUMP_DISTANCE_M = 250; // ignore teleports larger than this within 3s
 const JUMP_TIME_MS = 3000;
@@ -167,7 +167,17 @@ export function useDriverLocation(options?: Options) {
     };
 
     const onError = (err: GeolocationPositionError) => {
-      setStatus(err.code === err.PERMISSION_DENIED ? "denied" : "unavailable");
+      // PERMISSION_DENIED is sticky — the user must act.
+      if (err.code === err.PERMISSION_DENIED) {
+        setStatus("denied");
+        return;
+      }
+      // POSITION_UNAVAILABLE / TIMEOUT are transient (tunnels, signal stalls).
+      // Only surface "unavailable" when we have never had a fix — once GPS is
+      // active, keep it active and let the next good fix speak for itself.
+      if (!lastAcceptedRef.current) {
+        setStatus("unavailable");
+      }
     };
 
     const opts: PositionOptions = { enableHighAccuracy: true, timeout: 15000, maximumAge: 2000 };

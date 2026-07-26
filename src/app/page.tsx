@@ -306,21 +306,21 @@ export default function HomePage() {
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           {/* Desktop top tabs — Neon Cockpit */}
           <div className="hidden sm:block pb-3">
-            <TabsList className={`grid w-full bg-white/5 border border-white/10 h-12 ${session.user?.role === "ADMIN" ? "grid-cols-7" : "grid-cols-6"}`}>
-            <TabsTrigger value="dashboard" className="gap-1 text-xs sm:text-sm data-[state=active]:bg-primary/20 data-[state=active]:text-primary h-12">
-              <Truck className="h-4 w-4 hidden sm:block" />Dashboard
+            <TabsList className={`grid w-full bg-white/5 border border-white/10 h-12 gap-0 ${session.user?.role === "ADMIN" ? "grid-cols-7" : "grid-cols-6"}`}>
+            <TabsTrigger value="dashboard" className="gap-1 text-xs md:text-sm data-[state=active]:bg-primary/20 data-[state=active]:text-primary h-12 min-w-0 px-1">
+              <Truck className="h-4 w-4 hidden md:block shrink-0" /><span className="truncate">Dashboard</span>
             </TabsTrigger>
-            <TabsTrigger value="new-order" className="gap-1 text-xs sm:text-sm data-[state=active]:bg-primary/20 data-[state=active]:text-primary h-12">
-              <Plus className="h-4 w-4 hidden sm:block" />New
+            <TabsTrigger value="new-order" className="gap-1 text-xs md:text-sm data-[state=active]:bg-primary/20 data-[state=active]:text-primary h-12 min-w-0 px-1">
+              <Plus className="h-4 w-4 hidden md:block shrink-0" /><span className="truncate">New</span>
             </TabsTrigger>
-            <TabsTrigger value="orders" className="gap-1 text-xs sm:text-sm data-[state=active]:bg-primary/20 data-[state=active]:text-primary h-12">
-              <ClipboardList className="h-4 w-4 hidden sm:block" />Orders
+            <TabsTrigger value="orders" className="gap-1 text-xs md:text-sm data-[state=active]:bg-primary/20 data-[state=active]:text-primary h-12 min-w-0 px-1">
+              <ClipboardList className="h-4 w-4 hidden md:block shrink-0" /><span className="truncate">Orders</span>
             </TabsTrigger>
-            <TabsTrigger value="schedule" className="gap-1 text-xs sm:text-sm data-[state=active]:bg-primary/20 data-[state=active]:text-primary h-12">
-              <Calendar className="h-4 w-4 hidden sm:block" />Schedule
+            <TabsTrigger value="schedule" className="gap-1 text-xs md:text-sm data-[state=active]:bg-primary/20 data-[state=active]:text-primary h-12 min-w-0 px-1">
+              <Calendar className="h-4 w-4 hidden md:block shrink-0" /><span className="truncate">Schedule</span>
             </TabsTrigger>
-            <TabsTrigger value="sos" className="gap-1 text-xs sm:text-sm data-[state=active]:bg-primary/20 data-[state=active]:text-primary h-12 relative">
-              <Siren className="h-4 w-4 hidden sm:block" />SOS
+            <TabsTrigger value="sos" className="gap-1 text-xs md:text-sm data-[state=active]:bg-primary/20 data-[state=active]:text-primary h-12 relative min-w-0 px-1">
+              <Siren className="h-4 w-4 hidden md:block shrink-0" /><span className="truncate">SOS</span>
               {stats && stats.activeSosCount > 0 && (
                 <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
@@ -329,12 +329,12 @@ export default function HomePage() {
               )}
             </TabsTrigger>
             {session.user?.role === "ADMIN" && (
-              <TabsTrigger value="users" className="gap-1 text-xs sm:text-sm data-[state=active]:bg-primary/20 data-[state=active]:text-primary h-12">
-                <Shield className="h-4 w-4 hidden sm:block" />Users
+              <TabsTrigger value="users" className="gap-1 text-xs md:text-sm data-[state=active]:bg-primary/20 data-[state=active]:text-primary h-12 min-w-0 px-1">
+                <Shield className="h-4 w-4 hidden md:block shrink-0" /><span className="truncate">Users</span>
               </TabsTrigger>
             )}
-            <TabsTrigger value="settings" className="gap-1 text-xs sm:text-sm data-[state=active]:bg-primary/20 data-[state=active]:text-primary h-12">
-              <Settings className="h-4 w-4 hidden sm:block" />Settings
+            <TabsTrigger value="settings" className="gap-1 text-xs md:text-sm data-[state=active]:bg-primary/20 data-[state=active]:text-primary h-12 min-w-0 px-1">
+              <Settings className="h-4 w-4 hidden md:block shrink-0" /><span className="truncate">Settings</span>
             </TabsTrigger>
           </TabsList>
           </div>

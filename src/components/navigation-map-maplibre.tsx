@@ -43,7 +43,10 @@ const FOLLOW_ZOOM = 17;
 
 const ROUTE_COLOR = "#67e8f9"; // cyan-300 — bright high-contrast on the dark basemap
 const ROUTE_CASING = "#155e75"; // cyan-900 casing for edge definition
-const ROUTE_PASSED = "rgba(15, 23, 42, 0.85)";
+// Passed segment: same hue as the route but dimmed, so it reads as "already
+// driven" instead of a separate black trail. Kept the SAME width as the route
+// line so it never bleeds outside it.
+const ROUTE_PASSED = "rgba(103, 232, 249, 0.30)";
 
 function buildRasterStyle(mapStyle: "dark" | "light"): maplibregl.StyleSpecification {
   const origin = typeof window !== "undefined" ? window.location.origin : "";
@@ -196,7 +199,7 @@ export default function NavigationMapMaplibre({
     const passedPolyline = document.createElementNS(svgNs, "polyline");
     passedPolyline.setAttribute("fill", "none");
     passedPolyline.setAttribute("stroke", ROUTE_PASSED);
-    passedPolyline.setAttribute("stroke-width", "8");
+    passedPolyline.setAttribute("stroke-width", "5");
     passedPolyline.setAttribute("stroke-linecap", "round");
     passedPolyline.setAttribute("stroke-linejoin", "round");
     svg.appendChild(passedPolyline);
@@ -204,7 +207,12 @@ export default function NavigationMapMaplibre({
     routeSvgRef.current = polyline;
     passedSvgRef.current = passedPolyline;
 
-    const updateOverlay = () => updateRouteOverlay(map, routeSvgRef.current, routePathRef.current);
+    const updateOverlay = () => {
+      updateRouteOverlay(map, routeSvgRef.current, routePathRef.current);
+      // Re-project the passed segment too — during follow-camera the map moves
+      // every frame, and a stale passed line visibly shears off the route line.
+      updatePassedOverlay(map, passedSvgRef.current, routePathRef.current, progressRef.current, lastPassedUpdateRef, { force: true });
+    };
     map.on("move", updateOverlay);
     map.on("resize", updateOverlay);
 
@@ -455,23 +463,13 @@ function ensureRouteLayers(_map: maplibregl.Map) {
   // Route and passed segment are SVG overlays — no MapLibre layers needed.
 }
 
-function updatePassedOverlay(
-  map: maplibregl.Map,
-  polyline: SVGPolylineElement | null,
-  path: PathPoint[],
-  progressMeters: number,
-  lastUpdateRef: React.MutableRefObject<number>
-) {
-  if (!polyline) return;
-  if (path.length < 2) {
-    polyline.setAttribute("points", "");
-    return;
-  }
-  // Throttle to meaningful progress changes
-  if (Math.abs(progressMeters - lastUpdateRef.current) < 15) return;
-  lastUpdateRef.current = progressMeters;
-
-  // Build cumulative distances for the path
+// Cache cumulative distances per path reference — the path only changes when a
+// new leg is fetched (seconds), so rebuilding this trig-heavy array every
+// animation frame (map "move" fires per-frame under the follow camera) is
+// wasted work. Keyed by reference; the array identity changes with each leg.
+const cumCache = { path: null as PathPoint[] | null, cum: [] as number[] };
+function cumDistancesFor(path: PathPoint[]): number[] {
+  if (cumCache.path === path) return cumCache.cum;
   const cum: number[] = [0];
   for (let i = 1; i < path.length; i++) {
     cum.push(cum[i - 1] + haversineMeters(
@@ -479,24 +477,52 @@ function updatePassedOverlay(
       { lat: path[i][0], lng: path[i][1] }
     ));
   }
+  cumCache.path = path;
+  cumCache.cum = cum;
+  return cum;
+}
+
+function updatePassedOverlay(
+  map: maplibregl.Map,
+  polyline: SVGPolylineElement | null,
+  path: PathPoint[],
+  progressMeters: number,
+  lastUpdateRef: React.MutableRefObject<number>,
+  opts?: { force?: boolean }
+) {
+  if (!polyline) return;
+  if (path.length < 2) {
+    polyline.setAttribute("points", "");
+    return;
+  }
+  // Throttle to meaningful progress changes (skipped when forced, e.g. on map
+  // move, where only the projection changes — the split geometry is unchanged).
+  if (!opts?.force && Math.abs(progressMeters - lastUpdateRef.current) < 15) return;
+  lastUpdateRef.current = progressMeters;
+
+  const cum = cumDistancesFor(path);
 
   // Find split point at progressMeters
   let idx = 0;
   while (idx < cum.length - 1 && cum[idx + 1] < progressMeters) idx++;
-  const passedPath = path.slice(0, idx + 1);
   const snap = pointAlongPath(path, cum, progressMeters);
-  passedPath.push([snap.lat, snap.lng]);
 
-  // Project to screen coordinates (same logic as updateRouteOverlay)
+  // Project to screen coordinates, sub-sampled like updateRouteOverlay (~3 px
+  // per point) so per-frame re-projection stays cheap on dense OSRM geometry.
   const w = map.getCanvas().clientWidth;
   const h = map.getCanvas().clientHeight;
+  const step = Math.max(1, Math.floor(path.length / 400));
   const pts: string[] = [];
-  for (const [lat, lng] of passedPath) {
+  for (let i = 0; i <= idx; i += step) {
+    const [lat, lng] = path[i];
     const p = map.project([lng, lat]);
     if (p.x > -100 && p.x < w + 100 && p.y > -100 && p.y < h + 100) {
       pts.push(`${p.x.toFixed(1)},${p.y.toFixed(1)}`);
     }
   }
+  // Always end exactly at the snapped vehicle position for a crisp split.
+  const sp = map.project([snap.lng, snap.lat]);
+  pts.push(`${sp.x.toFixed(1)},${sp.y.toFixed(1)}`);
   polyline.setAttribute("points", pts.join(" "));
 }
 

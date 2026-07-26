@@ -1,8 +1,6 @@
 # HERO Sidekick — Changelog
 
-## [Unreleased] — Production (sidekick.rizen.space)
-
-### Added — 2026-07-24 Route Optimizer Improvements
+## [v1.28] — 26 Jul 2026 — Security Hardening, Code Audit & RizenCC Separation
 - **Per-load shortest drop-point selection**: `stitchSolution` now computes haversine distance from the last pickup in each load to both `DROP_A` (ERTH HQ, Cyberjaya) and `DROP_B` (Section 51A, PJ) and picks the shorter one, rather than using the per-order majority rule.
 - **Drop-point alternative comparison**: every load now carries an `alternative` field showing the distance, duration, and arrival times if the other drop point were used. Totals at the route level show both selected and alternative aggregate distances.
 - **Target ≤100 km display**: the route summary header now shows the current total distance colored green (≤100 km) or amber (>100 km) and displays the alternative-drop total for comparison.
@@ -47,6 +45,22 @@
 - Built and restarted PM2 `sidekick-app` on port 3001.
 - Resolved a lingering `next-server` zombie process that was causing `EADDRINUSE` restarts on port 3001.
 - Production smoke-tested: login, `/route/navigate` confirmation screen, and completed customer tracking page all load correctly.
+
+### Security & Audit (2026-07-26)
+- Full code review remediation: 82 findings resolved across auth, API, frontend, and infrastructure.
+- Auth hardened: rate limiting on all endpoints, 12+ char password policy, 2FA re-auth requirement.
+- Secrets at rest encrypted with AES-256-GCM (TOTP seeds, AI API keys).
+- SSRF guard blocks all private/internal IPs including IPv6.
+- Cross-tenant authorization enforced for tracking, batch, and verify-address endpoints.
+- XSS eliminated in Three.js labels and effect dependencies.
+- Navigation resume, skip-all, concurrency, and slow-arrival edge cases hardened.
+- CSP + HSTS security headers; PM2 and Nginx hardened (loopback bind, timeouts, body cap).
+- Database REINDEX fixed index corruption; daily backup cron with integrity verification.
+- 22 regression tests added for secrets, SSRF, rate limiter, navigation state, XSS.
+- Light/dark map toggle on all pages with localStorage persistence.
+- Production promoted: dev merged to sidekick.rizen.space.
+- Corrected HERO Sidekick v1.27 APK delivered (package `space.rizen.sidekick`).
+- RizenCC separated into standalone repo (package `com.rizencc`), removed from Sidekick repositories.
 
 ---
 

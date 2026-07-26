@@ -1,0 +1,32 @@
+[
+  {
+    "type": "payment",
+    "amount": 85,
+    "note": "26082 Kuala Lumpur",
+    "seq": 1
+  },
+  {
+    "type": "payment",
+    "amount": 20,
+    "note": "26103 - Subang Jaya",
+    "seq": 2
+  },
+  {
+    "type": "payment",
+    "amount": 25,
+    "note": "26136 Cheras",
+    "seq": 3
+  },
+  {
+    "type": "payment",
+    "amount": 85,
+    "note": "26138 Sungai Long",
+    "seq": 4
+  },
+  {
+    "type": "payment",
+    "amount": 26,
+    "note": "26079 Dengkil",
+    "seq": 5
+  }
+]
