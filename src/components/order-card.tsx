@@ -174,7 +174,7 @@ export function OrderCard({ order, compact, onRefresh, holidays, offDays, isAdmi
   const canReassign = isAdminView && heroes && heroes.length > 0 && displayStatus !== "COMPLETED" && onReassign;
 
   return (
-    <div role="button" tabIndex={0} aria-label={`Order ${order.orderId} timeline`} className={`card-touch rounded-xl border p-2.5 sm:p-3 ${z?.bgColor || "bg-white/5"} ${z?.borderColor || "border-white/10"} backdrop-blur-sm transition-all active:scale-[0.995] ${selected ? "ring-2 ring-primary/50 border-primary/30" : ""}`} onClick={(e) => { const t = e.target as HTMLElement; if (t.closest("button,a,input,select,textarea,[role=\"button\"],[data-no-timeline]")) return; onShowTimeline?.(); }} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onShowTimeline?.(); } }}>
+    <div role="button" tabIndex={0} aria-label={`Order ${order.orderId} timeline`} className={`card-touch rounded-xl border p-2.5 sm:p-3 ${z?.bgColor || "bg-white/5"} ${z?.borderColor || "border-white/10"} backdrop-blur-sm transition-all active:scale-[0.995] ${selected ? "ring-2 ring-primary/50 border-primary/30" : ""}`} onClick={(e) => { const t = e.target as HTMLElement; if (t.closest("button,a,input,select,textarea,[role=\"button\"],[data-no-timeline]")) return; onShowTimeline?.(); }} onKeyDown={(e) => { const t = e.target as HTMLElement; if (t.closest("button,a,input,select,textarea,[role=\"button\"],[data-no-timeline],[contenteditable]")) return; if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onShowTimeline?.(); } }}>
       {onToggleSelect && (
         <div className="flex items-center gap-2 mb-2">
           <Checkbox checked={!!selected} onCheckedChange={onToggleSelect} className="h-4 w-4" />

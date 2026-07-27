@@ -98,6 +98,8 @@ export function SettingsTab({ holidays, onRefresh, session, onReplayOnboarding, 
   const [waShowCreate, setWaShowCreate] = useState(false);
   const [waNewName, setWaNewName] = useState("");
   const [waNewMessage, setWaNewMessage] = useState("");
+  const [waRouteTemplate, setWaRouteTemplate] = useState("");
+  const [waRouteEditing, setWaRouteEditing] = useState(false);
 
   // Collapsible settings sections
   const [openSections, setOpenSections] = useState<Set<string>>(new Set(["import-export"]));
@@ -127,6 +129,7 @@ export function SettingsTab({ holidays, onRefresh, session, onReplayOnboarding, 
           try { setWaTemplates(JSON.parse(s.whatsappTemplates)); } catch { /* ignore */ }
         }
         if (s.whatsappPhonePrefix) setWaPhonePrefix(s.whatsappPhonePrefix);
+        if (s.whatsappRouteTemplate) setWaRouteTemplate(s.whatsappRouteTemplate);
       }
       if (twoFaData) {
         setTwoFAEnabled(twoFaData.enabled || false);
@@ -281,6 +284,7 @@ export function SettingsTab({ holidays, onRefresh, session, onReplayOnboarding, 
       await fetch("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
         whatsappTemplates: JSON.stringify(waTemplates),
         whatsappPhonePrefix: waPhonePrefix,
+        whatsappRouteTemplate: waRouteTemplate,
       }) });
       toast({ title: "WhatsApp settings saved" });
     } catch { toast({ title: "Failed to save", variant: "destructive" }); }
@@ -1188,6 +1192,32 @@ export function SettingsTab({ holidays, onRefresh, session, onReplayOnboarding, 
                 </div>
               </div>
             </details>
+
+            <Separator className="bg-white/5" />
+
+            {/* Route Optimizer Template */}
+            <div>
+              <h4 className="text-sm font-semibold flex items-center gap-2 mb-2"><Route className="h-4 w-4 text-emerald-400" />Route Optimizer Message</h4>
+              <p className="text-[0.625rem] text-muted-foreground mb-2">Template used when sending WhatsApp from the route optimizer. Variables: {"{customerName}"}, {"{date}"}, {"{address}"}, {"{arrival}"}, {"{trackUrl}"}.</p>
+              {waRouteEditing ? (
+                <div className="space-y-2">
+                  <Textarea value={waRouteTemplate} onChange={e => setWaRouteTemplate(e.target.value)} className="min-h-[80px] text-xs bg-white/5 border-white/10" placeholder="Hi {customerName}, pickup on {date} at {address}. ETA: {arrival}. Track: {trackUrl}" />
+                  <div className="flex gap-2">
+                    <Button size="sm" className="h-8 gap-1.5 text-[0.625rem] bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => { setWaRouteEditing(false); saveWhatsAppSettings(); }}>
+                      <CheckCircle className="h-3 w-3" />Save
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-8 text-[0.625rem] border-white/10" onClick={() => setWaRouteEditing(false)}>Cancel</Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-[0.75rem] text-muted-foreground whitespace-pre-wrap flex-1">{waRouteTemplate || <span className="italic text-muted-foreground/50">No template set — defaults to tracking-link message</span>}</p>
+                  <Button size="sm" variant="outline" className="h-8 gap-1.5 text-[0.625rem] shrink-0 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/15" onClick={() => setWaRouteEditing(true)}>
+                    <Pencil className="h-3 w-3" />Edit
+                  </Button>
+                </div>
+              )}
+            </div>
 
             {/* Save Button */}
             <Button onClick={saveWhatsAppSettings} disabled={saving} className="gap-2 h-10 bg-emerald-600 hover:bg-emerald-700 text-white px-4 w-full sm:w-auto">

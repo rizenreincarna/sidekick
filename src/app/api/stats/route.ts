@@ -40,7 +40,11 @@ export async function GET(request: NextRequest) {
     const todayStr = format(now, "yyyy-MM-dd");
     const weekEnd = format(addDays(now, 14), "yyyy-MM-dd");
 
-    // Time range filter for statistics
+    // Compute UTC midnight strings for fair date-range comparisons against
+    // Prisma-stored UTC timestamps, regardless of server timezone.
+    function utcMidnight(d: Date): string {
+      return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0)).toISOString();
+    }
     let rangeStart: Date;
     switch (range) {
       case "day": rangeStart = startOfDay(now); break;
@@ -49,7 +53,7 @@ export async function GET(request: NextRequest) {
       case "year": rangeStart = subYears(now, 1); break;
       default: rangeStart = new Date("2020-01-01"); break;
     }
-    const rangeFilter = { gte: rangeStart.toISOString() };
+    const rangeFilter = { gte: utcMidnight(rangeStart) };
 
     // Selectable week for workload view
     // Align to the Monday of the current week, then slide by whole weeks so the
@@ -78,12 +82,12 @@ export async function GET(request: NextRequest) {
       db.order.count({ where: { status: "COMPLETED", userId: queryUserId } }),
       db.order.count({ where: { status: "COMPLETED", userId: queryUserId, updatedAt: rangeFilter } }),
       db.order.findMany({
-        where: { scheduledDate: todayStr, status: { in: ["SCHEDULED", "CONFIRMED", "BOOKED"] }, userId: queryUserId },
+        where: { scheduledDate: todayStr, status: { in: ["SCHEDULED", "CONFIRMED", "BOOKED", "COMPLETED"] }, userId: queryUserId },
       }),
       db.order.findMany({
         where: {
           scheduledDate: { gte: todayStr, lte: weekEnd },
-          status: { in: ["SCHEDULED", "CONFIRMED", "BOOKED"] },
+          status: { in: ["SCHEDULED", "CONFIRMED", "BOOKED", "COMPLETED"] },
           userId: queryUserId,
         },
       }),
@@ -95,7 +99,7 @@ export async function GET(request: NextRequest) {
     const selWeekOrders = await db.order.findMany({
       where: {
         scheduledDate: { gte: selWeekStartStr, lte: selWeekEndStr },
-        status: { in: ["SCHEDULED", "CONFIRMED", "BOOKED"] },
+        status: { in: ["SCHEDULED", "CONFIRMED", "BOOKED", "COMPLETED"] },
         userId: queryUserId,
       },
     });
@@ -194,22 +198,22 @@ export async function GET(request: NextRequest) {
       orderTrends.push({ date: todayStr, created, completed });
     } else if (range === "year") {
       for (let i = 11; i >= 0; i--) {
-        const mStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
-        const mEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59);
+        const mStart = new Date(Date.UTC(now.getFullYear(), now.getMonth() - i, 1, 0, 0, 0));
+        const mEnd = new Date(Date.UTC(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59, 999));
         const [created, completed] = await Promise.all([
-          db.order.count({ where: { userId: queryUserId, createdAt: { gte: mStart.toISOString(), lte: mEnd.toISOString() } } }),
-          db.order.count({ where: { userId: queryUserId, status: "COMPLETED", updatedAt: { gte: mStart.toISOString(), lte: mEnd.toISOString() } } }),
+          db.order.count({ where: { userId: queryUserId, createdAt: { gte: mStart, lte: mEnd } } }),
+          db.order.count({ where: { userId: queryUserId, status: "COMPLETED", updatedAt: { gte: mStart, lte: mEnd } } }),
         ]);
         orderTrends.push({ date: format(mStart, "yyyy-MM"), created, completed });
       }
     } else {
       for (let i = trendDays - 1; i >= 0; i--) {
         const day = subDays(now, i);
-        const dStart = startOfDay(day);
-        const dEnd = endOfDay(day);
+        const dStart = new Date(Date.UTC(day.getFullYear(), day.getMonth(), day.getDate(), 0, 0, 0));
+        const dEnd = new Date(Date.UTC(day.getFullYear(), day.getMonth(), day.getDate(), 23, 59, 59, 999));
         const [created, completed] = await Promise.all([
-          db.order.count({ where: { userId: queryUserId, createdAt: { gte: dStart.toISOString(), lte: dEnd.toISOString() } } }),
-          db.order.count({ where: { userId: queryUserId, status: "COMPLETED", updatedAt: { gte: dStart.toISOString(), lte: dEnd.toISOString() } } }),
+          db.order.count({ where: { userId: queryUserId, createdAt: { gte: dStart, lte: dEnd } } }),
+          db.order.count({ where: { userId: queryUserId, status: "COMPLETED", updatedAt: { gte: dStart, lte: dEnd } } }),
         ]);
         orderTrends.push({ date: format(day, "yyyy-MM-dd"), created, completed });
       }

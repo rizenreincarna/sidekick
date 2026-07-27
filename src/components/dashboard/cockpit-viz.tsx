@@ -354,6 +354,13 @@ export function MixDonut({
   );
 }
 
+function localDateStr(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 /* ---------- Week capacity list (horizontal day rows, expandable) ----------
    Each row: day label + points on the left, area chips on the right.
    Tapping a row expands it to show ALL areas + order count + capacity %.
@@ -369,13 +376,13 @@ export function WeekCapacityGrid({
   offDays?: Array<{ date: string }>;
   maxDaily: number;
 }) {
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = localDateStr(new Date());
   const [expanded, setExpanded] = useState<string | null>(todayStr);
   const startD = weekStart ? new Date(weekStart + "T00:00:00") : (() => { const d = new Date(); const day = (d.getDay() + 6) % 7; d.setDate(d.getDate() - day); return d; })();
   const days = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(startD);
     d.setDate(d.getDate() + i);
-    const dateStr = d.toISOString().slice(0, 10);
+    const dateStr = localDateStr(d);
     const ordersForDay = schedule?.[dateStr]?.orders || [];
     const pts = schedule?.[dateStr]?.totalPoints || 0;
     const count = ordersForDay.length;
@@ -387,7 +394,7 @@ export function WeekCapacityGrid({
       count,
       pct,
       cities,
-      isOff: offDays?.some(od => od.date === dateStr),
+      isOff: offDays?.some(od => od.date === dateStr) ?? false,
       isToday: dateStr === todayStr,
       dayName: d.toLocaleDateString("en-US", { weekday: "short" }),
       dayNum: d.getDate(),

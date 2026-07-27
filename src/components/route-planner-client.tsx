@@ -33,6 +33,14 @@ export default function RoutePlannerClient() {
   const [routeStatus, setRouteStatus] = useState<string>("OPTIMIZED");
   const [panelOpen, setPanelOpen] = useState(true);
   const [trackingTokens, setTrackingTokens] = useState<Record<string, { token: string; completed: boolean }>>({});
+  const [routeWATmpl, setRouteWATmpl] = useState("");
+
+  // Load route optimizer WhatsApp template from settings
+  useEffect(() => {
+    fetch("/api/settings").then(r => r.json()).then(d => {
+      if (d?.whatsappRouteTemplate) setRouteWATmpl(d.whatsappRouteTemplate);
+    }).catch(() => {});
+  }, []);
   const [heroProfile, setHeroProfile] = useState<{ heroName: string; plateNumber: string; vehicleColor: string; vehicleModel: string; homeLatitude?: number | null; homeLongitude?: number | null } | null>(null);
   const [driverPosition, setDriverPosition] = useState<{ latitude: number; longitude: number; heading?: number | null } | null>(null);
   const [customRoutePath, setCustomRoutePath] = useState<[number, number][] | null>(null);
@@ -417,6 +425,23 @@ export default function RoutePlannerClient() {
     return updated;
   }, [heroProfile]);
 
+  // Manual planned arrival override — updates a stop's plannedArrival in route state
+  const setPlannedArrival = useCallback((orderDbId: string, arrivalUnix: number | null) => {
+    setRoute(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        loads: prev.loads.map(ld => ({
+          ...ld,
+          stops: ld.stops.map(s => s.orderDbId === orderDbId
+            ? (arrivalUnix == null ? { ...s, plannedArrival: undefined } : { ...s, plannedArrival: arrivalUnix })
+            : s
+          ),
+        })),
+      };
+    });
+  }, []);
+
   // Toggle drop-off point for a load (DROP_A ⇄ DROP_B). Re-optimizes with force.
   const onToggleDropOff = useCallback(async (loadIndex: number, newDrop: "DROP_A" | "DROP_B") => {
     if (!route || !date) return;
@@ -506,8 +531,8 @@ export default function RoutePlannerClient() {
                 title="Emergency: stop GPS tracking immediately"
                 className="flex items-center gap-1.5 px-2 py-1 rounded-full text-[0.625rem] font-bold transition-transform active:scale-90"
                 style={{
-                  background: gpsStatus === "active" ? "rgba(52,211,153,0.15)" : gpsStatus === "error" ? "rgba(251,113,133,0.15)" : "rgba(148,163,184,0.10)",
-                  color: gpsStatus === "active" ? "#34D399" : gpsStatus === "error" ? "#fb7185" : "#8aa8a3",
+                  background: gpsStatus === "active" ? "rgba(20,184,166,0.15)" : gpsStatus === "error" ? "rgba(251,113,133,0.15)" : "rgba(148,163,184,0.10)",
+                  color: gpsStatus === "active" ? "var(--nc-primary)" : gpsStatus === "error" ? "#fb7185" : "#8aa8a3",
                 }}
               >
                 <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: "currentColor", boxShadow: gpsStatus === "active" ? "0 0 8px currentColor" : undefined, animation: gpsStatus === "active" ? "pulse-soft 1.4s ease-in-out infinite" : undefined }} />
@@ -612,6 +637,8 @@ export default function RoutePlannerClient() {
               onToggleDropOff={onToggleDropOff}
               onReverseLoad={onReverseLoad}
               onReorderStops={onReorderStops}
+              onSetPlannedArrival={setPlannedArrival}
+              routeTemplate={routeWATmpl}
               saving={saving}
               routeStatus={routeStatus}
               trackingTokens={trackingTokens}

@@ -180,8 +180,9 @@ export interface VroomStopDetail {
   latitude: number;
   longitude: number;
   dropOff: "DROP_A" | "DROP_B";
-  arrival: number; // unix seconds
+  arrival: number; // unix seconds (VROOM-computed ETA)
   departure: number; // unix seconds (arrival + service)
+  plannedArrival?: number; // manual override (unix seconds)
   serviceSeconds: number;
   loadAfter: number; // cumulative points after this stop
 }

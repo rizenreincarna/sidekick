@@ -7,7 +7,7 @@ import { FIXED_LOCATIONS, VEHICLE } from "@/lib/route-model";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Save, Play, MapPin, Home, ChevronDown, ChevronRight, Navigation, MessageCircle, CheckCircle2, RotateCcw, GripVertical, ArrowUpDown, ChevronUp } from "lucide-react";
+import { Save, Play, MapPin, Home, ChevronDown, ChevronRight, Navigation, MessageCircle, CheckCircle2, RotateCcw, GripVertical, ArrowUpDown, ChevronUp, Clock, Pencil } from "lucide-react";
 
 interface Props {
   route: OptimizedRouteResult;
@@ -24,6 +24,8 @@ interface Props {
   onToggleDropOff?: (loadIndex: number, dropOff: "DROP_A" | "DROP_B") => void;
   onReorderStops?: (loadIndex: number, fromIndex: number, toIndex: number) => void;
   onReverseLoad?: (loadIndex: number) => void;
+  onSetPlannedArrival?: (orderDbId: string, arrivalUnix: number | null) => void;
+  routeTemplate?: string;
 }
 
 function gmapsNavUrl(lat: number, lon: number): string {
@@ -41,6 +43,90 @@ function fmtKm(meters: number): string {
   return (meters / 1000).toFixed(1) + " km";
 }
 
+/* Inline arrival editor — tap pencil to set a manual planned time override */
+function ArrivalEditor({
+  stop,
+  editing,
+  onEdit,
+  onSetPlanned,
+  minsUntil,
+}: {
+  stop: VroomStopDetail;
+  editing: boolean;
+  onEdit: (id: string | null) => void;
+  onSetPlanned?: (orderDbId: string, arrivalUnix: number | null) => void;
+  minsUntil: (sec: number) => number | null;
+}) {
+  const [timeVal, setTimeVal] = useState("");
+  const effSec = stop.plannedArrival ?? stop.arrival;
+  const mins = minsUntil(effSec);
+
+  const save = () => {
+    const [h, mm] = timeVal.split(":");
+    if (h && mm) {
+      const d = new Date();
+      d.setHours(+h, +mm, 0, 0);
+      onSetPlanned?.(stop.orderDbId, Math.floor(d.getTime() / 1000));
+    }
+    onEdit(null);
+  };
+
+  if (editing) {
+    return (
+      <span className="mt-0.5 block text-muted-foreground">
+        <span className="inline-flex items-center gap-1">
+          <Clock className="h-3 w-3" />
+          <input
+            type="time"
+            value={timeVal}
+            onChange={e => setTimeVal(e.target.value)}
+            className="h-5 w-20 rounded border border-primary/40 bg-transparent px-1 text-[0.7rem] text-foreground"
+            autoFocus
+            onBlur={save}
+            onKeyDown={e => {
+              if (e.key === "Enter") save();
+              if (e.key === "Escape") onEdit(null);
+            }}
+          />
+          <button
+            onClick={() => { onSetPlanned?.(stop.orderDbId, null); onEdit(null); }}
+            className="text-[0.6rem] text-muted-foreground hover:text-red-400"
+          >
+            reset
+          </button>
+        </span>
+      </span>
+    );
+  }
+
+  return (
+    <span className="mt-0.5 block text-muted-foreground">
+      ETA {fmtMalaysiaTime(effSec)}
+      {stop.plannedArrival != null && <span className="text-[0.5625rem] text-amber-400/70 ml-0.5 italic">planned</span>}
+      <button
+        onClick={(ev) => {
+          ev.stopPropagation();
+          const d = new Date(effSec * 1000);
+          setTimeVal(`${String(d.getUTCHours() + 8).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`);
+          onEdit(stop.orderDbId);
+        }}
+        className="inline-flex items-center ml-1 p-0.5 rounded hover:bg-white/10 text-muted-foreground hover:text-foreground"
+        title="Set planned arrival"
+      >
+        <Pencil className="h-2.5 w-2.5" />
+      </button>
+      {(() => {
+        if (mins === null) return null;
+        if (mins < 0) return <span className="text-amber-400"> · {Math.abs(mins)}min overdue</span>;
+        if (mins === 0) return <span className="text-emerald-400"> · arriving now</span>;
+        return <span className="text-primary/70"> · in {mins}min</span>;
+      })()}
+      · {stop.points} pts · zone {stop.zone}
+      {stop.isOffice ? " · office" : ""}
+    </span>
+  );
+}
+
 export default function RouteSummaryPanel({
   route,
   selectedOrderId,
@@ -56,6 +142,8 @@ export default function RouteSummaryPanel({
   onToggleDropOff,
   onReorderStops,
   onReverseLoad,
+  onSetPlannedArrival,
+  routeTemplate,
 }: Props) {
   const [openLoad, setOpenLoad] = useState<number | null>(0);
   const [now, setNow] = useState(Date.now());
@@ -65,12 +153,6 @@ export default function RouteSummaryPanel({
     const interval = setInterval(() => setNow(Date.now()), 60_000);
     return () => clearInterval(interval);
   }, []);
-
-  // Helper: calculate minutes from now to a unix-seconds arrival time
-  const minsUntilArrival = (arrivalSec: number) => {
-    const diff = Math.round((arrivalSec * 1000 - now) / 60000);
-    return diff;
-  };
 
   const stats = useMemo(() => {
     return {
@@ -174,6 +256,8 @@ export default function RouteSummaryPanel({
             onReorderStops={onReorderStops}
             onReverseLoad={onReverseLoad}
             now={now}
+            onSetPlannedArrival={onSetPlannedArrival}
+            routeTemplate={routeTemplate}
           />
         ))}
 
@@ -245,6 +329,8 @@ function LoadBlock({
   onReorderStops,
   onReverseLoad,
   now,
+  onSetPlannedArrival,
+  routeTemplate,
 }: {
   load: VroomLoadPlan;
   index: number;
@@ -260,6 +346,8 @@ function LoadBlock({
   onReorderStops?: (loadIndex: number, fromIndex: number, toIndex: number) => void;
   onReverseLoad?: (loadIndex: number) => void;
   now?: number;
+  onSetPlannedArrival?: (orderDbId: string, arrivalUnix: number | null) => void;
+  routeTemplate?: string;
 }) {
   const drop = load.dropOff === "DROP_B" ? FIXED_LOCATIONS.DROP_B : FIXED_LOCATIONS.DROP_A;
   const alt = load.alternative;
@@ -269,6 +357,9 @@ function LoadBlock({
   // Drag-and-drop state
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  // Arrival editing state — which stop is being edited
+  const [editingArrivalId, setEditingArrivalId] = useState<string | null>(null);
+
   return (
     <div className="mb-3 overflow-hidden rounded-lg border border-white/10 bg-white/5">
       <button
@@ -326,9 +417,11 @@ function LoadBlock({
               const trackUrl = tracking
                 ? `${typeof window !== "undefined" ? window.location.origin : ""}/track/${tracking.token}`
                 : null;
-              const waMsg = trackUrl
-                ? `Hi ${s.customerName}, your e-waste pickup is scheduled for ${routeDate || ""}. Track your driver live here: ${trackUrl}`
-                : null;
+              const waMsg = routeTemplate
+                ? (() => { const ar = fmtMalaysiaTime(s.plannedArrival ?? s.arrival); return routeTemplate.replace(/\{customerName\}/g, s.customerName).replace(/\{date\}/g, routeDate || "TBD").replace(/\{address\}/g, s.address).replace(/\{arrival\}/g, ar).replace(/\{trackUrl\}/g, trackUrl || ""); })()
+                : trackUrl
+                  ? `Hi ${s.customerName}, your pickup is on ${routeDate || ""} at ${s.address}. ETA: ${fmtMalaysiaTime(s.plannedArrival ?? s.arrival)}. Track: ${trackUrl}`
+                  : null;
               const waUrl = waMsg
                 ? s.phone
                   ? `https://wa.me/${s.phone.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(waMsg)}`
@@ -451,18 +544,13 @@ function LoadBlock({
                           {s.customerName}{" "}
                           <span className="text-muted-foreground">· {s.orderId}</span>
                         </span>
-                        <span className="mt-0.5 block text-muted-foreground">
-                          ETA {fmtMalaysiaTime(s.arrival)}
-                          {(() => {
-                            const mins = minsUntil(s.arrival);
-                            if (mins === null) return null;
-                            if (mins < 0) return <span className="text-amber-400"> · {Math.abs(mins)}min overdue</span>;
-                            if (mins === 0) return <span className="text-emerald-400"> · arriving now</span>;
-                            return <span className="text-primary/70"> · in {mins}min</span>;
-                          })()}
-                          · {s.points} pts · zone {s.zone}
-                          {s.isOffice ? " · office" : ""}
-                        </span>
+                        <ArrivalEditor
+                          stop={s}
+                          editing={editingArrivalId === s.orderDbId}
+                          onEdit={setEditingArrivalId}
+                          onSetPlanned={onSetPlannedArrival}
+                          minsUntil={minsUntil}
+                        />
                         {tracking?.completed && (
                           <span className="mt-0.5 block text-emerald-400">
                             ✓ Pickup done

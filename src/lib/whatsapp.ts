@@ -1,6 +1,8 @@
 import { format, parseISO } from "date-fns";
 import type { Order } from "@/types/page";
 import { DEFAULT_WHATSAPP_TEMPLATES } from "@/types/page";
+import { fmtMalaysiaTime } from "@/lib/vroom";
+import type { VroomStopDetail } from "@/lib/vroom";
 
 export function fillTemplate(template: string, order: Order): string {
   const date = order.scheduledDate ? format(parseISO(order.scheduledDate), "dd MMM yyyy (EEE)") : "TBD";
@@ -13,7 +15,26 @@ export function fillTemplate(template: string, order: Order): string {
     .replace(/\{size\}/g, order.size)
     .replace(/\{points\}/g, order.points.toString())
     .replace(/\{city\}/g, order.city)
-    .replace(/\{notes\}/g, order.notes || "N/A");
+    .replace(/\{notes\}/g, order.notes || "N/A")
+    .replace(/\{arrival\}/g, "N/A")
+    .replace(/\{trackUrl\}/g, "N/A");
+}
+
+/** Fill a route-optimizer WhatsApp template using a VroomStopDetail + context */
+export function fillRouteTemplate(
+  template: string,
+  stop: VroomStopDetail,
+  routeDate: string,
+  trackUrl: string | null,
+): string {
+  const arrival = fmtMalaysiaTime(stop.plannedArrival ?? stop.arrival);
+  const date = routeDate || "TBD";
+  return template
+    .replace(/\{customerName\}/g, stop.customerName)
+    .replace(/\{date\}/g, date)
+    .replace(/\{address\}/g, stop.address)
+    .replace(/\{arrival\}/g, arrival)
+    .replace(/\{trackUrl\}/g, trackUrl || "");
 }
 
 export function formatPhoneForWhatsApp(phone: string, prefix: string = "60"): string {

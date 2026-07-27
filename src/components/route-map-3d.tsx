@@ -961,7 +961,7 @@ export default function RouteMap3D({ route, onSelectStop, selectedOrderId, heroP
         colHex = "#f97316"; // orange for not done
       }
       const name = sm.stop.customerName.length > 14 ? sm.stop.customerName.slice(0, 13) + "…" : sm.stop.customerName;
-      const eta = fmtMalaysiaTime(sm.stop.arrival);
+      const eta = fmtMalaysiaTime(sm.stop.plannedArrival ?? sm.stop.arrival);
       const html = `
         <div class="r3d-label-num" style="background:${colHex}">${sm.num}${checkmark}</div>
         <div class="r3d-label-body">
@@ -1409,7 +1409,7 @@ export default function RouteMap3D({ route, onSelectStop, selectedOrderId, heroP
                 </div>
                 <div className="flex items-center gap-1.5">
                   <Clock className="h-3 w-3 shrink-0 text-primary/60" />
-                  <span>ETA <span className="font-medium text-foreground">{fmtMalaysiaTime(selectedInfo.stop.arrival)}</span></span>
+                  <span>ETA <span className="font-medium text-foreground">{fmtMalaysiaTime(selectedInfo.stop.plannedArrival ?? selectedInfo.stop.arrival)}</span></span>
                   <span className="text-white/20">·</span>
                   <Package className="h-3 w-3 shrink-0 text-primary/60" />
                   <span><span className="font-medium text-foreground">{selectedInfo.stop.points}</span> pts · {selectedInfo.stop.size}</span>

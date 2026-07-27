@@ -1,0 +1,38 @@
+[
+  {
+    "type": "payment",
+    "amount": 130,
+    "note": "26104 - Subang Jaya",
+    "seq": 1
+  },
+  {
+    "type": "payment",
+    "amount": 20,
+    "note": "26083 - Puchong",
+    "seq": 2
+  },
+  {
+    "type": "payment",
+    "amount": 75,
+    "note": "26080 - Puchong",
+    "seq": 3
+  },
+  {
+    "type": "payment",
+    "amount": 37,
+    "note": "26047 - Puchong",
+    "seq": 4
+  },
+  {
+    "type": "payment",
+    "amount": 14,
+    "note": "26081 - Puchong",
+    "seq": 5
+  },
+  {
+    "type": "payment",
+    "amount": 12,
+    "note": "26068 - Cyberjaya",
+    "seq": 6
+  }
+]

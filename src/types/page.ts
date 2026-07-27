@@ -94,6 +94,16 @@ export const WHATSAPP_VARIABLES = [
   { key: "{points}", label: "Points", example: "2" },
   { key: "{city}", label: "City/Area", example: "Ampang" },
   { key: "{notes}", label: "Notes", example: "Call before delivery" },
+  { key: "{arrival}", label: "Arrival Time", example: "14:30" },
+  { key: "{trackUrl}", label: "Tracking URL", example: "https://..." },
+] as const;
+
+export const ROUTE_OPTIMIZER_VARIABLES = [
+  { key: "{customerName}", label: "Customer Name" },
+  { key: "{date}", label: "Route Date" },
+  { key: "{address}", label: "Address" },
+  { key: "{arrival}", label: "ETA (Planned)" },
+  { key: "{trackUrl}", label: "Tracking URL" },
 ] as const;
 
 export const DEFAULT_WHATSAPP_TEMPLATES: WhatsAppTemplate[] = [
