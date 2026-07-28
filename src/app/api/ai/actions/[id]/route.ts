@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { generateEventId, isValidEventType } from "@/lib/events";
 import { generateErthboxId } from "@/lib/erthbox";
 import { quickGeocode } from "@/lib/geocode";
+import { canonicalNormalTransition } from "@/lib/order-status";
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await requireAuth();
@@ -88,7 +89,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
               }
               // For RESCHEDULE_ORDER, also update status to SCHEDULED if currently PENDING
               if (action.actionType === "RESCHEDULE_ORDER" && updateData.scheduledDate && order.status === "PENDING") {
-                updateData.status = "SCHEDULED";
+                updateData.status = canonicalNormalTransition(order.status, "SCHEDULED");
               }
               if (Object.keys(updateData).length > 0) {
                 await db.order.update({ where: { id: order.id }, data: updateData });
@@ -126,12 +127,15 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
               order = await db.order.findFirst({ where: { orderId: action.entityId, userId: action.userId } });
             }
             if (order) {
-              const newStatus = (payload as { status?: string }).status;
-              if (newStatus && ["PENDING", "SCHEDULED", "CONFIRMED", "BOOKED", "COMPLETED"].includes(newStatus)) {
-                await db.order.update({ where: { id: order.id }, data: { status: newStatus } });
-                const { logAudit } = await import("@/lib/audit");
-                await logAudit({ userId: action.userId, action: "UPDATE", entity: "Order", entityId: order.id, details: JSON.stringify({ orderId: order.orderId, statusFrom: order.status, statusTo: newStatus, source: "AI" }) });
+              let newStatus: string;
+              try {
+                newStatus = canonicalNormalTransition(order.status, (payload as { status?: string }).status);
+              } catch (cause) {
+                return NextResponse.json({ error: cause instanceof Error ? cause.message : "Invalid status transition." }, { status: 400 });
               }
+              await db.order.update({ where: { id: order.id }, data: { status: newStatus } });
+              const { logAudit } = await import("@/lib/audit");
+              await logAudit({ userId: action.userId, action: "UPDATE", entity: "Order", entityId: order.id, details: JSON.stringify({ orderId: order.orderId, statusFrom: order.status, statusTo: newStatus, source: "AI" }) });
             }
           }
           break;

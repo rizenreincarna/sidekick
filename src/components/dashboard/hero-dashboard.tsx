@@ -38,7 +38,7 @@ import {
 const STATUS_META = [
   { label: "Pending",    code: "PENDING",   color: "#FBBF24" },
   { label: "Scheduled",  code: "SCHEDULED", color: "#22D3EE" },
-  { label: "Contacted",  code: "CONFIRMED", color: "#34D399" },
+  { label: "Contacted",  code: "CONTACTED", color: "#34D399" },
   { label: "Booked",     code: "BOOKED",    color: "#A78BFA" },
   { label: "Completed",  code: "COMPLETED", color: "#94A3B8" },
 ];
@@ -130,7 +130,7 @@ export function HeroDashboard({
     count:
       m.code === "PENDING" ? s.pendingCount
       : m.code === "SCHEDULED" ? s.scheduledCount
-      : m.code === "CONFIRMED" ? s.confirmedCount
+      : m.code === "CONTACTED" ? s.confirmedCount
       : m.code === "BOOKED" ? s.bookedCount
       : s.completedCount,
   }));

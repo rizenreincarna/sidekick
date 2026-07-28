@@ -318,7 +318,7 @@ export function TutorialSection() {
       sections: [
         {
           heading: "Auto-Schedule",
-          content: "Click 'Auto-Schedule All Pending' to automatically distribute pending orders across available days. The system respects the 12-point daily limit, avoids OFF days, holidays, and event days."
+          content: "Click 'Auto-Schedule All Pending' to automatically distribute pending orders across available days. The system respects the 20-point normal daily limit, avoids OFF days, holidays, and event days."
         },
         {
           heading: "Manual Rescheduling",
@@ -513,7 +513,7 @@ export function TutorialSection() {
         },
         {
           heading: "Schedule Analysis",
-          content: "The AI can analyze your schedule and provide insights — busy days, light days, conflicts with events, approaching the 12pt daily cap, and suggested actions. Ask 'What should I know about this week?' for a full breakdown."
+          content: "The AI can analyze your schedule and provide insights - busy days, light days, conflicts with events, approaching the 20pt normal daily limit, and suggested actions. Ask 'What should I know about this week?' for a full breakdown."
         },
         {
           heading: "Daily Summary",

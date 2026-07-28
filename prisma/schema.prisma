@@ -8,38 +8,39 @@ datasource db {
 }
 
 model User {
-  id               String            @id @default(cuid())
-  username         String            @unique
-  password         String
-  displayName      String?
-  role             Role              @default(HERO)
-  isActive         Boolean           @default(true)
-  isApproved       Boolean           @default(false)
-  twoFactorEnabled Boolean           @default(false)
-  twoFactorSecret  String?
-  lastLoginAt      DateTime?
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  aiActions        AiAction[]
-  aiConversations  AiConversation[]
-  aiFlags          AiFlag[]
-  auditLogs        AuditLog[]
-  chatMessages     ChatMessage[]
-  deviceTokens     DeviceToken[]
-  driverLocations  DriverLocation[]
-  erthboxLocations ErthboxLocation[]
-  heroProfile      HeroProfile?
-  holidays         Holiday[]
-  notifications    Notification[]
-  offDays          OffDay[]
-  orders           Order[]
-  routes           Route[]
-  sosAnswered      SOSRequest[]      @relation("AnsweredSOS")
-  sosRequests      SOSRequest[]
-  settings         Setting[]
-  trackingLinks    TrackingLink[]
-  userZones        UserZone[]
-  zoneConfigs      ZoneConfig[]
+  id                    String                      @id @default(cuid())
+  username              String                      @unique
+  password              String
+  displayName           String?
+  role                  Role                        @default(HERO)
+  isActive              Boolean                     @default(true)
+  isApproved            Boolean                     @default(false)
+  twoFactorEnabled      Boolean                     @default(false)
+  twoFactorSecret       String?
+  lastLoginAt           DateTime?
+  createdAt             DateTime                    @default(now())
+  updatedAt             DateTime                    @updatedAt
+  aiActions             AiAction[]
+  aiConversations       AiConversation[]
+  aiFlags               AiFlag[]
+  auditLogs             AuditLog[]
+  chatMessages          ChatMessage[]
+  deviceTokens          DeviceToken[]
+  driverLocations       DriverLocation[]
+  erthboxLocations      ErthboxLocation[]
+  heroProfile           HeroProfile?
+  holidays              Holiday[]
+  notifications         Notification[]
+  offDays               OffDay[]
+  orders                Order[]
+  routes                Route[]
+  sosAnswered           SOSRequest[]                @relation("AnsweredSOS")
+  sosRequests           SOSRequest[]
+  settings              Setting[]
+  trackingLinks         TrackingLink[]
+  userZones             UserZone[]
+  zoneConfigs           ZoneConfig[]
+  marieRateReservations AutomationRateReservation[]
 }
 
 model Route {
@@ -92,7 +93,7 @@ model DeviceToken {
 }
 
 model Order {
-  id                      String           @id @default(cuid())
+  id                      String                 @id @default(cuid())
   orderId                 String
   customerName            String
   phone                   String
@@ -101,23 +102,28 @@ model Order {
   size                    String
   points                  Int
   zone                    Int
-  isOffice                Boolean          @default(false)
-  isEvent                 Boolean          @default(false)
+  isOffice                Boolean                @default(false)
+  isEvent                 Boolean                @default(false)
   eventType               String?
-  isErthbox               Boolean          @default(false)
+  isErthbox               Boolean                @default(false)
   erthboxLocationId       String?
-  status                  String           @default("PENDING")
+  status                  String                 @default("PENDING")
   scheduledDate           String?
   notes                   String?
   latitude                Float?
   longitude               Float?
-  addressVerified         Boolean          @default(false)
+  addressVerified         Boolean                @default(false)
   addressVerificationNote String?
   userId                  String
-  createdAt               DateTime         @default(now())
-  updatedAt               DateTime         @updatedAt
-  erthboxLocation         ErthboxLocation? @relation(fields: [erthboxLocationId], references: [id])
-  user                    User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt               DateTime               @default(now())
+  updatedAt               DateTime               @updatedAt
+  erthboxLocation         ErthboxLocation?       @relation(fields: [erthboxLocationId], references: [id])
+  user                    User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  marieConversations      CustomerConversation[]
+  marieJobs               AutomationJob[]
+  marieEscalations        CustomerEscalation[]
+  marieHolds              OrderHold[]
+  marieEvents             AutomationEvent[]
 
   @@unique([userId, orderId])
   @@index([userId, status])
@@ -126,6 +132,200 @@ model Order {
   @@index([userId, createdAt])
   @@index([isErthbox])
   @@index([erthboxLocationId])
+}
+
+model MarieAutomationConfig {
+  id                       String   @id @default("default")
+  enabled                  Boolean  @default(false)
+  mode                     String   @default("DRY_RUN")
+  contactStartHour         Int      @default(8)
+  contactEndHour           Int      @default(20)
+  normalCapacity           Int      @default(20)
+  maxCapacity              Int      @default(25)
+  pilotAllowlist           String   @default("[]")
+  maxMessagesPerRun        Int      @default(10)
+  maxMessagesPerHour       Int      @default(20)
+  maxMessagesPerDay        Int      @default(100)
+  maxRetries               Int      @default(3)
+  wahaSessionName          String?
+  telegramOwnerId          String?
+  escalationEnabled        Boolean  @default(false)
+  inboundProcessingEnabled Boolean  @default(false)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+}
+
+model CustomerConversation {
+  id               String                      @id @default(cuid())
+  orderId          String?
+  chatId           String
+  normalizedPhone  String?
+  lid              String?
+  state            String                      @default("ACTIVE")
+  language         String?
+  pausedAt         DateTime?
+  createdAt        DateTime                    @default(now())
+  updatedAt        DateTime                    @updatedAt
+  order            Order?                      @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  messages         CustomerMessage[]
+  jobs             AutomationJob[]
+  escalations      CustomerEscalation[]
+  events           AutomationEvent[]
+  rateReservations AutomationRateReservation[]
+
+  @@unique([orderId, chatId])
+  @@index([state, updatedAt])
+  @@index([normalizedPhone])
+  @@index([chatId])
+  @@index([lid])
+}
+
+model CustomerMessage {
+  id                String                     @id @default(cuid())
+  conversationId    String
+  direction         String
+  providerMessageId String?                    @unique
+  idempotencyKey    String                     @unique
+  body              String?
+  bodyHash          String?
+  messageType       String                     @default("TEXT")
+  deliveryState     String                     @default("PENDING")
+  retryCount        Int                        @default(0)
+  providerTimestamp DateTime?
+  metadata          String?
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
+  sendStartedAt     DateTime?
+  conversation      CustomerConversation       @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  events            AutomationEvent[]
+  rateReservation   AutomationRateReservation?
+
+  @@index([conversationId, createdAt])
+  @@index([direction, deliveryState])
+}
+
+model AutomationJob {
+  id             String                @id @default(cuid())
+  orderId        String?
+  conversationId String?
+  kind           String
+  state          String                @default("PENDING")
+  idempotencyKey String                @unique
+  runAfter       DateTime
+  leaseUntil     DateTime?
+  leaseToken     String?
+  attempts       Int                   @default(0)
+  deadLetteredAt DateTime?
+  lastErrorCode  String?
+  payload        String?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  order          Order?                @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  conversation   CustomerConversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([state, runAfter])
+  @@index([orderId, state])
+}
+
+model AutomationRateReservation {
+  id             String               @id @default(cuid())
+  userId         String
+  conversationId String
+  messageId      String               @unique
+  hourBucket     String
+  dayBucket      String
+  reservedAt     DateTime             @default(now())
+  user           User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversation   CustomerConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  message        CustomerMessage      @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([userId, hourBucket])
+  @@index([userId, dayBucket])
+  @@index([conversationId, hourBucket])
+}
+
+model MarieWebhookDelivery {
+  id          String    @id @default(cuid())
+  deliveryKey String    @unique
+  envelopeId  String?
+  eventType   String
+  sessionName String
+  outcome     String?
+  receivedAt  DateTime  @default(now())
+  processedAt DateTime?
+
+  @@index([eventType, receivedAt])
+}
+
+model MarieUnmatchedWebhook {
+  id                String   @id @default(cuid())
+  providerMessageId String?  @unique
+  eventType         String
+  reasonCode        String
+  identifierKind    String
+  receivedAt        DateTime @default(now())
+
+  @@index([reasonCode, receivedAt])
+}
+
+model CustomerEscalation {
+  id             String                @id @default(cuid())
+  orderId        String?
+  conversationId String?
+  correlationId  String                @unique
+  category       String
+  severity       String
+  state          String                @default("OPEN")
+  summary        String
+  proposedAction String?
+  resolvedBy     String?
+  resolvedAt     DateTime?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  order          Order?                @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  conversation   CustomerConversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+
+  @@index([state, severity, createdAt])
+  @@index([orderId, state])
+}
+
+model OrderHold {
+  id         String    @id @default(cuid())
+  orderId    String?
+  reasonCode String
+  reason     String
+  state      String    @default("ACTIVE")
+  createdBy  String
+  releasedBy String?
+  releasedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  order      Order?    @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([orderId, state])
+  @@index([state, createdAt])
+}
+
+model AutomationEvent {
+  id             String                @id @default(cuid())
+  orderId        String?
+  conversationId String?
+  messageId      String?
+  eventType      String
+  actor          String
+  idempotencyKey String                @unique
+  beforeState    String?
+  afterState     String?
+  reasonCode     String?
+  metadata       String?
+  createdAt      DateTime              @default(now())
+  order          Order?                @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  conversation   CustomerConversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  message        CustomerMessage?      @relation(fields: [messageId], references: [id], onDelete: SetNull)
+
+  @@index([orderId, createdAt])
+  @@index([conversationId, createdAt])
+  @@index([eventType, createdAt])
 }
 
 model Holiday {

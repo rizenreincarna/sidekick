@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
     const orders = await db.order.findMany({
       where: {
         scheduledDate: date,
-        status: { in: ["CONFIRMED", "BOOKED"] },
+        status: { in: ["CONTACTED", "BOOKED"] },
         userId: targetUserId,
         latitude: { not: null },
         longitude: { not: null },
@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
       const anyOrders = await db.order.count({ where: { scheduledDate: date, userId: targetUserId } });
       const completedToday = await db.order.count({ where: { scheduledDate: date, status: "COMPLETED", userId: targetUserId } });
       const notGeocoded = await db.order.count({
-        where: { scheduledDate: date, status: { in: ["CONFIRMED", "BOOKED"] }, userId: targetUserId, OR: [{ latitude: null }, { longitude: null }] },
+        where: { scheduledDate: date, status: { in: ["CONTACTED", "BOOKED"] }, userId: targetUserId, OR: [{ latitude: null }, { longitude: null }] },
       });
       const hint = completedToday > 0
         ? ` There ${completedToday === 1 ? "is" : "are"} ${completedToday} completed order${completedToday > 1 ? "s" : ""} for this date — all pickups may already be done.`

@@ -129,7 +129,7 @@ export function ScheduleTab({ stats, orders, onRefresh, userZones }: { stats: St
   const weekDays = eachDayOfInterval({ start: weekStart, end: addDays(weekStart, 6) });
 
   const selectedDateStr = selectedDate ? format(selectedDate, "yyyy-MM-dd") : null;
-  const selectedOrders = selectedDateStr ? (stats?.scheduleByDate[selectedDateStr]?.orders || orders.filter(o => o.scheduledDate === selectedDateStr && ["SCHEDULED", "CONFIRMED", "BOOKED"].includes(o.status))) : [];
+  const selectedOrders = selectedDateStr ? (stats?.scheduleByDate[selectedDateStr]?.orders || orders.filter(o => o.scheduledDate === selectedDateStr && ["SCHEDULED", "CONTACTED", "BOOKED"].includes(o.status))) : [];
   const selectedPoints = selectedDateStr ? getDayPoints(selectedDateStr) : 0;
 
   return (
@@ -305,4 +305,3 @@ function addMonths(date: Date, months: number): Date {
   d.setMonth(d.getMonth() + months);
   return d;
 }
-

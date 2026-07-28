@@ -179,7 +179,7 @@ export async function POST(request: NextRequest) {
       }),
       // Confirmed orders
       db.order.findMany({
-        where: { userId: user.id, status: "CONFIRMED" },
+        where: { userId: user.id, status: "CONTACTED" },
         orderBy: { createdAt: "desc" },
         select: orderSelect,
         take: 20,
@@ -279,7 +279,7 @@ export async function POST(request: NextRequest) {
       let dayLabel = `📅 ${date} (${dayOfWeek})`;
       if (isOffDay) dayLabel += " [OFF DAY]";
       if (isHoliday) dayLabel += " [HOLIDAY]";
-      dayLabel += ` (${dayPts}/12pts, ${orders.length} orders)`;
+      dayLabel += ` (${dayPts}/20pts normal, 25pts max, ${orders.length} orders)`;
       weekScheduleLines.push(dayLabel);
       for (const o of orders) {
         let line = `  • #${o.orderId} ${o.customerName} ${o.city} Z${o.zone}`;
@@ -381,7 +381,7 @@ ${dedupedOrders.slice(0, 10).map(o => `• ${formatOrder(o)}`).join("\n") || "No
         select: {
           id: true, username: true, displayName: true, lastLoginAt: true,
           orders: {
-            where: { status: { in: ["PENDING", "SCHEDULED", "CONFIRMED", "BOOKED"] } },
+            where: { status: { in: ["PENDING", "SCHEDULED", "CONTACTED", "BOOKED"] } },
             select: { id: true, orderId: true, status: true, points: true, scheduledDate: true, city: true, zone: true, isEvent: true, isErthbox: true, customerName: true },
           },
           offDays: { where: { date: { gte: today } }, select: { date: true, reason: true } },

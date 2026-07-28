@@ -4,6 +4,7 @@ import { logAudit } from "@/lib/audit";
 import { requireAuth } from "@/lib/session";
 import { quickGeocode } from "@/lib/geocode";
 import { NextRequest, NextResponse } from "next/server";
+import { canonicalNormalTransition } from "@/lib/order-status";
 
 // PATCH /api/orders/[id] - Update an order (owner, Support, or Admin)
 export async function PATCH(
@@ -89,24 +90,16 @@ export async function PATCH(
       updateData.notes = notes;
     }
     if (status !== undefined) {
-      // Validate status transition — CANCELED is allowed from any status,
-      // and CANCELED can be reverted to any other status.
-      const VALID_TRANSITIONS: Record<string, string[]> = {
-        PENDING: ["SCHEDULED", "CONFIRMED", "BOOKED", "COMPLETED", "CANCELED"],
-        SCHEDULED: ["PENDING", "CONFIRMED", "BOOKED", "COMPLETED", "CANCELED"],
-        CONFIRMED: ["PENDING", "SCHEDULED", "BOOKED", "COMPLETED", "CANCELED"],
-        BOOKED: ["PENDING", "SCHEDULED", "CONFIRMED", "COMPLETED", "CANCELED"],
-        COMPLETED: ["PENDING", "SCHEDULED", "CONFIRMED", "BOOKED", "CANCELED"],
-        CANCELED: ["PENDING", "SCHEDULED", "CONFIRMED", "BOOKED", "COMPLETED"],
-      };
-      const allowed = VALID_TRANSITIONS[existingOrder.status];
-      if (!allowed || !allowed.includes(status)) {
+      let canonicalStatus: string;
+      try {
+        canonicalStatus = canonicalNormalTransition(existingOrder.status, status);
+      } catch {
         return NextResponse.json(
           { error: `Invalid status transition from ${existingOrder.status} to ${status}` },
           { status: 400 }
         );
       }
-      updateData.status = status;
+      updateData.status = canonicalStatus;
     }
     if (scheduledDate !== undefined) updateData.scheduledDate = scheduledDate;
     if (latitude !== undefined) updateData.latitude = latitude;

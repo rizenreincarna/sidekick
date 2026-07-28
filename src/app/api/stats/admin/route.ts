@@ -153,7 +153,7 @@ export async function GET(request: NextRequest) {
       select: {
         id: true, username: true, displayName: true,
         orders: {
-          where: { status: { in: ["PENDING", "SCHEDULED", "CONFIRMED", "BOOKED"] } },
+          where: { status: { in: ["PENDING", "SCHEDULED", "CONTACTED", "BOOKED"] } },
           select: { points: true, status: true },
         },
       },

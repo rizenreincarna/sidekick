@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
     const orders = await db.order.findMany({
       where: {
         scheduledDate: date,
-        status: { in: ["SCHEDULED", "CONFIRMED", "BOOKED"] },
+        status: { in: ["SCHEDULED", "CONTACTED", "BOOKED"] },
         userId: user.id,
       },
       orderBy: { zone: "asc" },

@@ -6,6 +6,7 @@ import { generateEventId, isValidEventType } from "@/lib/events";
 import { generateErthboxId } from "@/lib/erthbox";
 import { quickGeocode } from "@/lib/geocode";
 import { NextRequest, NextResponse } from "next/server";
+import { normalizeOrderStatus } from "@/lib/order-status";
 
 // GET /api/orders - List orders for current user, or all heroes' orders for Support/Admin
 // Admin with ?all=true sees ALL orders across all users
@@ -37,7 +38,11 @@ export async function GET(request: NextRequest) {
     if (!showAllOrders) {
       where.userId = targetUserId;
     }
-    if (status) where.status = status;
+    if (status) {
+      const canonicalStatus = normalizeOrderStatus(status);
+      if (!canonicalStatus) return NextResponse.json({ error: "Invalid order status filter" }, { status: 400 });
+      where.status = canonicalStatus;
+    }
     if (zone) where.zone = parseInt(zone);
     if (date) where.scheduledDate = date;
 

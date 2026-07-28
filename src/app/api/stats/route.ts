@@ -77,17 +77,17 @@ export async function GET(request: NextRequest) {
     ] = await Promise.all([
       db.order.count({ where: { status: "PENDING", userId: queryUserId } }),
       db.order.count({ where: { status: "SCHEDULED", userId: queryUserId } }),
-      db.order.count({ where: { status: "CONFIRMED", userId: queryUserId } }),
+      db.order.count({ where: { status: "CONTACTED", userId: queryUserId } }),
       db.order.count({ where: { status: "BOOKED", userId: queryUserId } }),
       db.order.count({ where: { status: "COMPLETED", userId: queryUserId } }),
       db.order.count({ where: { status: "COMPLETED", userId: queryUserId, updatedAt: rangeFilter } }),
       db.order.findMany({
-        where: { scheduledDate: todayStr, status: { in: ["SCHEDULED", "CONFIRMED", "BOOKED", "COMPLETED"] }, userId: queryUserId },
+        where: { scheduledDate: todayStr, status: { in: ["SCHEDULED", "CONTACTED", "BOOKED", "COMPLETED"] }, userId: queryUserId },
       }),
       db.order.findMany({
         where: {
           scheduledDate: { gte: todayStr, lte: weekEnd },
-          status: { in: ["SCHEDULED", "CONFIRMED", "BOOKED", "COMPLETED"] },
+          status: { in: ["SCHEDULED", "CONTACTED", "BOOKED", "COMPLETED"] },
           userId: queryUserId,
         },
       }),
@@ -99,7 +99,7 @@ export async function GET(request: NextRequest) {
     const selWeekOrders = await db.order.findMany({
       where: {
         scheduledDate: { gte: selWeekStartStr, lte: selWeekEndStr },
-        status: { in: ["SCHEDULED", "CONFIRMED", "BOOKED", "COMPLETED"] },
+        status: { in: ["SCHEDULED", "CONTACTED", "BOOKED", "COMPLETED"] },
         userId: queryUserId,
       },
     });
@@ -111,7 +111,7 @@ export async function GET(request: NextRequest) {
     const mapAll = searchParams.get("mapAll") === "true"; // show all heroes' orders
 
     const mappableWhere: Record<string, unknown> = {
-      status: { in: ["PENDING", "SCHEDULED", "CONFIRMED", "BOOKED"] },
+      status: { in: ["PENDING", "SCHEDULED", "CONTACTED", "BOOKED"] },
       latitude: { not: null },
       longitude: { not: null },
     };

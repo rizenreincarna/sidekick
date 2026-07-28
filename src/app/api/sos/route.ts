@@ -72,10 +72,10 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Update order status to indicate SOS
+    // SOS is orthogonal to lifecycle status; preserve the current canonical state.
     await db.order.update({
       where: { id: order.id },
-      data: { status: "PENDING", notes: `SOS: ${sosNote}${order.notes ? ` | ${order.notes}` : ""}` },
+      data: { notes: `SOS: ${sosNote}${order.notes ? ` | ${order.notes}` : ""}` },
     });
 
     // Audit log

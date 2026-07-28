@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { canonicalStatusForWrite, type OrderStatus } from "@/lib/order-status";
 
 export async function getSheetsConfig(userId: string) {
   const settings = await db.setting.findMany({
@@ -37,8 +38,30 @@ interface SheetOrder {
   isOffice: boolean;
   zone: number;
   scheduledDate: string | null;
-  status: string;
+  status: OrderStatus;
   notes: string | null;
+}
+
+export function parseSheetOrderStatus(value: unknown): OrderStatus {
+  return canonicalStatusForWrite(typeof value === "string" && value.trim() ? value : "PENDING");
+}
+
+export function parseSheetOrderRow(row: string[]): SheetOrder | null {
+  const orderId = row[0] || "";
+  if (!orderId) return null;
+  return {
+    orderId,
+    customerName: row[1] || "",
+    phone: row[2] || "",
+    address: row[3] || "",
+    city: row[4] || "",
+    size: row[5] || "S",
+    isOffice: (row[6] || "").toLowerCase() === "yes",
+    zone: parseInt(row[7]) || 4,
+    scheduledDate: row[8] || null,
+    status: parseSheetOrderStatus(row[9]),
+    notes: row[10] || null,
+  };
 }
 
 export async function syncToSheet(orders: SheetOrder[], spreadsheetId: string, serviceAccountJson: string) {
@@ -75,10 +98,5 @@ export async function importFromSheet(spreadsheetId: string, serviceAccountJson:
 
   const response = await sheets.spreadsheets.values.get({ spreadsheetId, range: "A2:K" });
   const rows = response.data.values || [];
-  return rows.map((row: string[]) => ({
-    orderId: row[0] || "", customerName: row[1] || "", phone: row[2] || "",
-    address: row[3] || "", city: row[4] || "", size: row[5] || "S",
-    isOffice: (row[6] || "").toLowerCase() === "yes", zone: parseInt(row[7]) || 4,
-    scheduledDate: row[8] || null, status: row[9] || "PENDING", notes: row[10] || null,
-  })).filter((o: { orderId: string }) => o.orderId);
+  return rows.map(parseSheetOrderRow).filter((order): order is SheetOrder => order !== null);
 }

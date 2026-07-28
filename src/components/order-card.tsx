@@ -153,23 +153,20 @@ export function OrderCard({ order, compact, onRefresh, holidays, offDays, isAdmi
     } finally { setLoading(false); setShowSosDialog(false); setSosNote(""); }
   };
 
-  const nextStatus: Record<string, string | null> = { PENDING: "SCHEDULED", SCHEDULED: "CONFIRMED", CONFIRMED: "BOOKED", BOOKED: "COMPLETED" };
+  const nextStatus: Record<string, string | null> = { PENDING: "SCHEDULED", SCHEDULED: "CONTACTED", CONTACTED: "BOOKED", BOOKED: "COMPLETED" };
   const ns = nextStatus[displayStatus];
-  // UI-side transition map — any status can be changed to any other status.
-  // This gives full flexibility: cancel from any state, restore from cancel to any state.
-  const ALL_STATUSES = ["PENDING", "SCHEDULED", "CONFIRMED", "BOOKED", "COMPLETED", "CANCELED"];
   const VALID_TRANSITIONS_UI: Record<string, string[]> = {
-    PENDING: ["SCHEDULED", "CONFIRMED", "BOOKED", "COMPLETED", "CANCELED"],
-    SCHEDULED: ["PENDING", "CONFIRMED", "BOOKED", "COMPLETED", "CANCELED"],
-    CONFIRMED: ["PENDING", "SCHEDULED", "BOOKED", "COMPLETED", "CANCELED"],
-    BOOKED: ["PENDING", "SCHEDULED", "CONFIRMED", "COMPLETED", "CANCELED"],
-    COMPLETED: ["PENDING", "SCHEDULED", "CONFIRMED", "BOOKED", "CANCELED"],
-    CANCELED: ["PENDING", "SCHEDULED", "CONFIRMED", "BOOKED", "COMPLETED"],
+    PENDING: ["SCHEDULED", "CANCELED"],
+    SCHEDULED: ["CONTACTED", "CANCELED"],
+    CONTACTED: ["BOOKED", "CANCELED"],
+    BOOKED: ["COMPLETED", "CANCELED"],
+    COMPLETED: [],
+    CANCELED: [],
   };
   const z = ZONES[order.zone];
   const sizeConf = SIZE_CONFIG[order.size] || SIZE_CONFIG.S;
   const canDelete = displayStatus !== "COMPLETED" || isAdminView;
-  const canChangeDate = ["PENDING", "SCHEDULED", "CONFIRMED"].includes(displayStatus);
+  const canChangeDate = ["PENDING", "SCHEDULED", "CONTACTED"].includes(displayStatus);
   const canSos = ["PENDING", "SCHEDULED"].includes(displayStatus);
   const canReassign = isAdminView && heroes && heroes.length > 0 && displayStatus !== "COMPLETED" && onReassign;
 
@@ -212,7 +209,7 @@ export function OrderCard({ order, compact, onRefresh, holidays, offDays, isAdmi
                 <div className="space-y-2 py-2">
                   <p className="text-sm text-muted-foreground">Set status for <span className="font-semibold text-foreground">{order.orderId}</span></p>
                   <div className="grid grid-cols-1 gap-2">
-                    {(["PENDING", "SCHEDULED", "CONFIRMED", "BOOKED", "COMPLETED", "CANCELED"] as const).map(s => {
+                    {(["PENDING", "SCHEDULED", "CONTACTED", "BOOKED", "COMPLETED", "CANCELED"] as const).map(s => {
                       const conf = STATUS_CONFIG[s];
                       return (
                         <Button
@@ -221,11 +218,11 @@ export function OrderCard({ order, compact, onRefresh, holidays, offDays, isAdmi
                           variant={displayStatus === s ? "default" : "outline"}
                           className={`h-11 justify-start gap-2 text-sm font-medium ${displayStatus === s ? "bg-primary text-primary-foreground" : `${conf?.bgColor || "bg-white/5"} ${conf?.color || "text-foreground"} ${conf?.borderColor || "border-white/10"} border hover:bg-white/10`}`}
                           onClick={() => { updateStatus(s); setShowStatusDialog(false); }}
-                          disabled={loading || (s !== "CANCELED" && VALID_TRANSITIONS_UI[displayStatus]?.includes(s) === false && displayStatus !== s)}
+                          disabled={loading || (!VALID_TRANSITIONS_UI[displayStatus]?.includes(s) && displayStatus !== s)}
                         >
                           {s === "PENDING" && <Clock className="h-4 w-4" />}
                           {s === "SCHEDULED" && <Calendar className="h-4 w-4" />}
-                          {s === "CONFIRMED" && <CheckCircle2 className="h-4 w-4" />}
+                          {s === "CONTACTED" && <CheckCircle2 className="h-4 w-4" />}
                           {s === "BOOKED" && <Building2 className="h-4 w-4" />}
                           {s === "COMPLETED" && <CheckCircle className="h-4 w-4" />}
                           {s === "CANCELED" && <XCircle className="h-4 w-4" />}
@@ -335,7 +332,7 @@ export function OrderCard({ order, compact, onRefresh, holidays, offDays, isAdmi
           {compact && <p className="text-xs text-muted-foreground mt-0.5">{order.customerName} · {order.city}</p>}
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          {(displayStatus === "SCHEDULED" || displayStatus === "CONFIRMED" || displayStatus === "BOOKED" || displayStatus === "COMPLETED") && (
+          {(displayStatus === "SCHEDULED" || displayStatus === "CONTACTED" || displayStatus === "BOOKED" || displayStatus === "COMPLETED") && (
             <Button size="sm" variant="ghost" className="h-11 w-11 p-0 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/15" onClick={() => {
               // Load templates and open dialog
               fetch("/api/settings").then(r => r.json()).then(s => {

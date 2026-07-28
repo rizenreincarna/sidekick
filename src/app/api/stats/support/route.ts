@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
         },
         orders: {
           select: { id: true, orderId: true, status: true, points: true, size: true, scheduledDate: true, city: true, zone: true, isEvent: true, isErthbox: true },
-          where: { status: { in: ["PENDING", "SCHEDULED", "CONFIRMED", "BOOKED", "COMPLETED"] } },
+          where: { status: { in: ["PENDING", "SCHEDULED", "CONTACTED", "BOOKED", "COMPLETED"] } },
           take: 200,
         },
         offDays: { select: { id: true, date: true, reason: true } },
@@ -58,11 +58,11 @@ export async function GET(request: NextRequest) {
       const completedInRange = h.orders.filter(o => o.status === "COMPLETED");
       const weekOrders = h.orders.filter(o =>
         o.scheduledDate && o.scheduledDate >= weekStartStr && o.scheduledDate <= weekEndStr &&
-        ["SCHEDULED", "CONFIRMED", "BOOKED"].includes(o.status)
+        ["SCHEDULED", "CONTACTED", "BOOKED"].includes(o.status)
       );
       const weekPoints = weekOrders.reduce((s, o) => s + o.points, 0);
       const todayStr = format(now, "yyyy-MM-dd");
-      const todayOrders = h.orders.filter(o => o.scheduledDate === todayStr && ["SCHEDULED", "CONFIRMED", "BOOKED"].includes(o.status));
+      const todayOrders = h.orders.filter(o => o.scheduledDate === todayStr && ["SCHEDULED", "CONTACTED", "BOOKED"].includes(o.status));
       const todayPoints = todayOrders.reduce((s, o) => s + o.points, 0);
       const offDaysThisWeek = h.offDays.filter(od => od.date >= weekStartStr && od.date <= weekEndStr);
 
@@ -87,7 +87,7 @@ export async function GET(request: NextRequest) {
 
     // === ALL ORDERS ACROSS HEROES (for support management) ===
     const allActiveOrders = await db.order.findMany({
-      where: { status: { in: ["PENDING", "SCHEDULED", "CONFIRMED", "BOOKED"] } },
+      where: { status: { in: ["PENDING", "SCHEDULED", "CONTACTED", "BOOKED"] } },
       include: { user: { select: { id: true, username: true, displayName: true, role: true } } },
       orderBy: { createdAt: "desc" },
       take: 50,

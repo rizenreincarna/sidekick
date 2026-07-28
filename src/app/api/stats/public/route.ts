@@ -59,18 +59,18 @@ export async function GET(request: NextRequest) {
       db.order.count({ where: { status: "BOOKED", userId: queryUserId } }),
       db.order.count({ where: { status: "COMPLETED", userId: queryUserId } }),
       db.order.findMany({
-        where: { scheduledDate: todayStr, status: { in: ["SCHEDULED", "CONFIRMED", "BOOKED"] }, userId: queryUserId },
+        where: { scheduledDate: todayStr, status: { in: ["SCHEDULED", "CONTACTED", "BOOKED"] }, userId: queryUserId },
       }),
       db.order.findMany({
         where: {
           scheduledDate: { gte: todayStr, lte: weekEnd },
-          status: { in: ["SCHEDULED", "CONFIRMED", "BOOKED"] },
+          status: { in: ["SCHEDULED", "CONTACTED", "BOOKED"] },
           userId: queryUserId,
         },
       }),
       // Count active Hermes processes as "active agents"
       db.$queryRawUnsafe<Array<{ count: bigint }>>(
-        `SELECT COUNT(*) as count FROM "Order" WHERE "userId" = $1 AND "status" IN ('PENDING','SCHEDULED','CONFIRMED','BOOKED')`,
+        `SELECT COUNT(*) as count FROM "Order" WHERE "userId" = $1 AND "status" IN ('PENDING','SCHEDULED','CONTACTED','BOOKED')`,
         queryUserId
       ),
     ]);
@@ -93,7 +93,7 @@ export async function GET(request: NextRequest) {
     const result = {
       pendingCount,
       bookedCount,
-      completedCount: completedCount + (await db.order.count({ where: { status: { in: ["SCHEDULED", "CONFIRMED"] }, userId: queryUserId } })),
+      completedCount: completedCount + (await db.order.count({ where: { status: { in: ["SCHEDULED", "CONTACTED"] }, userId: queryUserId } })),
       todayPoints,
       weekPoints,
       activeAgents: activeAgentCount,

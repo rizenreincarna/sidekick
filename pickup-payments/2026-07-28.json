@@ -1,0 +1,38 @@
+[
+  {
+    "type": "payment",
+    "amount": 35,
+    "note": "26143 - Puncak Alam",
+    "seq": 1
+  },
+  {
+    "type": "payment",
+    "amount": 97,
+    "note": "26097 - Sungai Buloh",
+    "seq": 2
+  },
+  {
+    "type": "payment",
+    "amount": 25,
+    "note": "26052 - Petaling Jaya",
+    "seq": 3
+  },
+  {
+    "type": "payment",
+    "amount": 50,
+    "note": "26121 - Petaling Jaya",
+    "seq": 4
+  },
+  {
+    "type": "payment",
+    "amount": 42,
+    "note": "26037 - Petaling Jaya",
+    "seq": 5
+  },
+  {
+    "type": "payment",
+    "amount": 27,
+    "note": "26049 - Puchong",
+    "seq": 6
+  }
+]

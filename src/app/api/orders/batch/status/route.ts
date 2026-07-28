@@ -1,15 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAuth } from "@/lib/session";
-
-const VALID_TRANSITIONS: Record<string, string[]> = {
-  PENDING: ["SCHEDULED", "CANCELED"],
-  SCHEDULED: ["CONFIRMED", "PENDING", "CANCELED"],
-  CONFIRMED: ["BOOKED", "SCHEDULED", "CANCELED"],
-  BOOKED: ["COMPLETED", "CONFIRMED", "CANCELED"],
-  COMPLETED: [],
-  CANCELED: [],
-};
+import { canTransitionOrderStatus, normalizeOrderStatus } from "@/lib/order-status";
 
 // PATCH /api/orders/batch/status - Bulk update order statuses
 export async function PATCH(request: NextRequest) {
@@ -27,8 +19,9 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "Maximum 100 orders per batch update" }, { status: 400 });
     }
 
-    const validStatuses = ["PENDING", "SCHEDULED", "CONFIRMED", "BOOKED", "COMPLETED"];
-    if (!validStatuses.includes(status)) {
+    const validStatuses = ["PENDING", "SCHEDULED", "CONTACTED", "BOOKED", "COMPLETED", "CANCELED"];
+    const canonicalStatus = normalizeOrderStatus(status);
+    if (!canonicalStatus || !validStatuses.includes(canonicalStatus)) {
       return NextResponse.json({ error: `Invalid status. Must be one of: ${validStatuses.join(", ")}` }, { status: 400 });
     }
 
@@ -48,8 +41,7 @@ export async function PATCH(request: NextRequest) {
     const skipped: string[] = [];
 
     for (const order of orders) {
-      const allowed = VALID_TRANSITIONS[order.status];
-      if (!allowed || !allowed.includes(status)) {
+      if (!canTransitionOrderStatus(order.status, canonicalStatus)) {
         skipped.push(order.id);
         continue;
       }
@@ -65,14 +57,14 @@ export async function PATCH(request: NextRequest) {
 
     const result = await db.order.updateMany({
       where: { id: { in: validOrderIds }, userId: user.id },
-      data: { status },
+      data: { status: canonicalStatus },
     });
 
     return NextResponse.json({
       updated: result.count,
       skipped: skipped.length,
       requested: orderIds.length,
-      status,
+      status: canonicalStatus,
     });
   } catch (error) {
     console.error("[orders/batch/status] PATCH error:", error);

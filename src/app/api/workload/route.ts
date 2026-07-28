@@ -28,7 +28,7 @@ export async function GET() {
         displayName: true,
         orders: {
           where: {
-            status: { in: ["PENDING", "SCHEDULED", "CONFIRMED", "BOOKED"] },
+            status: { in: ["PENDING", "SCHEDULED", "CONTACTED", "BOOKED"] },
           },
           select: {
             id: true,
@@ -50,14 +50,14 @@ export async function GET() {
     const heroWorkloads = heroes.map((hero) => {
       const pendingCount = hero.orders.filter((o) => o.status === "PENDING").length;
       const scheduledCount = hero.orders.filter((o) => o.status === "SCHEDULED").length;
-      const confirmedCount = hero.orders.filter((o) => o.status === "CONFIRMED").length;
+      const confirmedCount = hero.orders.filter((o) => o.status === "CONTACTED").length;
       const bookedCount = hero.orders.filter((o) => o.status === "BOOKED").length;
       const todayOrders = hero.orders.filter(
-        (o) => o.scheduledDate === todayStr && ["SCHEDULED", "CONFIRMED", "BOOKED"].includes(o.status)
+        (o) => o.scheduledDate === todayStr && ["SCHEDULED", "CONTACTED", "BOOKED"].includes(o.status)
       );
       const todayPoints = todayOrders.reduce((sum, o) => sum + o.points, 0);
       const weekOrders = hero.orders.filter(
-        (o) => o.scheduledDate && o.scheduledDate >= todayStr && o.scheduledDate <= weekEnd && ["SCHEDULED", "CONFIRMED", "BOOKED"].includes(o.status)
+        (o) => o.scheduledDate && o.scheduledDate >= todayStr && o.scheduledDate <= weekEnd && ["SCHEDULED", "CONTACTED", "BOOKED"].includes(o.status)
       );
       const weekPoints = weekOrders.reduce((sum, o) => sum + o.points, 0);
       const totalActiveOrders = pendingCount + scheduledCount + confirmedCount + bookedCount;

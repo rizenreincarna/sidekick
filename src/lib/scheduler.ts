@@ -1,69 +1,11 @@
 import { db } from "@/lib/db";
-import { MAX_DAILY_POINTS, ZONES, detectZone } from "./zones";
-import { format, addDays, isWeekend } from "date-fns";
+import { detectZone } from "./zones";
 import { quickGeocode } from "./geocode";
 import { FIXED_LOCATIONS } from "./route-model";
+import { centroid, evaluateSchedulerFeasibility, hasCoordinates, haversineDistance, removeOneCoordinate, scoreSchedulerDay, SCHEDULER_MAX_POINTS } from "./scheduler-policy";
+import { MARIE_TIME_ZONE } from "./marie-operations";
 
 // Haversine distance between two lat/lng points (returns km)
-function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6371; // Earth radius in km
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLng = (lng2 - lng1) * Math.PI / 180;
-  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLng/2) * Math.sin(dLng/2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-  return R * c;
-}
-
-// Daily route distance threshold (km) — max circuit HOME -> stops -> DROP -> HOME
-const MAX_DAILY_ROUTE_KM = 110;
-// Haversine underestimates road distance; multiply by this factor for a realistic estimate
-const ROAD_FACTOR = 1.25;
-// Max distance (km) any single stop can be from the day's centroid.
-// Prevents adding a distant order to an otherwise tight cluster.
-const MAX_CLUSTER_RADIUS_KM = 12;
-
-/**
- * Estimate total route distance for a set of stops using nearest-neighbor ordering.
- * Route: HOME -> stops (nearest-neighbor chain) -> DROP_A -> HOME
- * Returns road-distance estimate (haversine * ROAD_FACTOR).
- */
-function estimateDayRouteDistance(coords: { latitude: number; longitude: number }[]): number {
-  if (coords.length === 0) return 0;
-  const H = FIXED_LOCATIONS.HOME;
-  const D = FIXED_LOCATIONS.DROP_A;
-  const visited = new Set<number>();
-  let total = 0;
-  let curLat = H.latitude;
-  let curLng = H.longitude;
-  for (let step = 0; step < coords.length; step++) {
-    let bestIdx = -1;
-    let bestDist = Infinity;
-    for (let j = 0; j < coords.length; j++) {
-      if (visited.has(j)) continue;
-      const d = haversineDistance(curLat, curLng, coords[j].latitude, coords[j].longitude);
-      if (d < bestDist) { bestDist = d; bestIdx = j; }
-    }
-    if (bestIdx < 0) break;
-    visited.add(bestIdx);
-    total += bestDist;
-    curLat = coords[bestIdx].latitude;
-    curLng = coords[bestIdx].longitude;
-  }
-  // Last stop -> DROP_A -> HOME
-  total += haversineDistance(curLat, curLng, D.latitude, D.longitude);
-  total += haversineDistance(D.latitude, D.longitude, H.latitude, H.longitude);
-  return total * ROAD_FACTOR;
-}
-
-// Mean centroid of a set of coordinate points
-function centroid(points: { latitude: number; longitude: number }[]): { latitude: number; longitude: number } | null {
-  if (points.length === 0) return null;
-  let sumLat = 0, sumLng = 0;
-  for (const p of points) { sumLat += p.latitude; sumLng += p.longitude; }
-  return { latitude: sumLat / points.length, longitude: sumLng / points.length };
-}
 
 interface ScheduleResult {
   scheduled: { orderId: string; date: string; points: number; zone: number }[];
@@ -75,11 +17,29 @@ interface OrderCoord {
   orderId: string;
   zone: number;
   city: string;
+  address: string;
   points: number;
   isOffice: boolean;
   latitude: number | null;
   longitude: number | null;
   createdAt: Date;
+}
+
+function mytDateParts(now: Date): { year: number; month: number; day: number } {
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: MARIE_TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(now);
+  const value = (type: string) => Number(parts.find(part => part.type === type)?.value);
+  return { year: value("year"), month: value("month"), day: value("day") };
+}
+
+function addMytDays(now: Date, days: number): string {
+  const { year, month, day } = mytDateParts(now);
+  const date = new Date(Date.UTC(year, month - 1, day + days));
+  return date.toISOString().slice(0, 10);
+}
+
+function isWeekendDate(date: string): boolean {
+  const weekday = new Date(`${date}T00:00:00Z`).getUTCDay();
+  return weekday === 0 || weekday === 6;
 }
 
 interface DayState {
@@ -124,9 +84,13 @@ export async function autoSchedule(userId: string): Promise<ScheduleResult> {
   const disabledZonesSetting = await db.setting.findUnique({
     where: { userId_key: { userId, key: "disabledZones" } },
   });
-  const disabledZones: number[] = disabledZonesSetting?.value
-    ? JSON.parse(disabledZonesSetting.value)
-    : [];
+  let disabledZones: number[] = [];
+  try {
+    const parsed: unknown = disabledZonesSetting?.value ? JSON.parse(disabledZonesSetting.value) : [];
+    if (Array.isArray(parsed)) disabledZones = parsed.filter((zone): zone is number => Number.isInteger(zone));
+  } catch {
+    disabledZones = [];
+  }
 
   const zoneUpdateOps: Promise<unknown>[] = [];
   for (const order of pendingOrders) {
@@ -155,13 +119,13 @@ export async function autoSchedule(userId: string): Promise<ScheduleResult> {
   const eventDates = new Set(eventOrders.map(e => e.scheduledDate).filter((d): d is string => d !== null));
 
   const today = new Date();
-  const startDate = format(today, "yyyy-MM-dd");
+  const startDate = addMytDays(today, 0);
   const lookAhead = 21;
-  const endDate = format(addDays(today, lookAhead), "yyyy-MM-dd");
+  const endDate = addMytDays(today, lookAhead);
 
   const existingOrders = await db.order.findMany({
     where: {
-      status: { in: ["SCHEDULED", "CONFIRMED", "BOOKED"] },
+      status: { in: ["SCHEDULED", "CONTACTED", "BOOKED"] },
       scheduledDate: { gte: startDate, lte: endDate },
       userId,
     },
@@ -170,8 +134,7 @@ export async function autoSchedule(userId: string): Promise<ScheduleResult> {
   // Working days: skip today, tomorrow, OFF days, event days
   const workingDays: string[] = [];
   for (let i = 0; i < lookAhead; i++) {
-    const day = addDays(today, i);
-    const dateStr = format(day, "yyyy-MM-dd");
+    const dateStr = addMytDays(today, i);
     if (i < 2) continue;
     if (!offDayDates.has(dateStr) && !eventDates.has(dateStr)) {
       workingDays.push(dateStr);
@@ -195,7 +158,7 @@ export async function autoSchedule(userId: string): Promise<ScheduleResult> {
     const day = dayMap[order.scheduledDate];
     day.totalPoints += order.points;
     day.zones[order.zone] = (day.zones[order.zone] || 0) + 1;
-    if (order.latitude && order.longitude) {
+    if (hasCoordinates(order)) {
       day.coords.push({ latitude: order.latitude, longitude: order.longitude });
     }
   }
@@ -209,6 +172,7 @@ export async function autoSchedule(userId: string): Promise<ScheduleResult> {
     orderId: o.orderId,
     zone: o.zone,
     city: o.city,
+    address: o.address,
     points: o.points,
     isOffice: o.isOffice,
     latitude: o.latitude,
@@ -220,7 +184,7 @@ export async function autoSchedule(userId: string): Promise<ScheduleResult> {
   const missingGeo = queue.filter(o => o.latitude === null || o.longitude === null);
   for (const order of missingGeo) {
     try {
-      const coords = await quickGeocode("", order.city);
+      const coords = await quickGeocode(order.address, order.city);
       if (coords) {
         order.latitude = coords[0];
         order.longitude = coords[1];
@@ -247,7 +211,7 @@ export async function autoSchedule(userId: string): Promise<ScheduleResult> {
   // Dedupe key: orders at identical coordinates must share a day (consolidate trips)
   const coordKeyToOrderIds = new Map<string, string[]>();
   for (const order of queue) {
-    if (order.latitude && order.longitude) {
+    if (hasCoordinates(order)) {
       const key = `${order.latitude.toFixed(5)}|${order.longitude.toFixed(5)}`;
       const list = coordKeyToOrderIds.get(key) || [];
       list.push(order.id);
@@ -270,30 +234,8 @@ export async function autoSchedule(userId: string): Promise<ScheduleResult> {
    * Check whether adding an order to a day violates any hard geographic constraint.
    * Returns false if the order should be rejected from this day.
    */
-  const passesHardConstraints = (day: DayState, order: OrderCoord): boolean => {
-    if (order.points > MAX_DAILY_POINTS - day.totalPoints) return false;
-    if (!order.latitude || !order.longitude) {
-      // No coordinates — can't compute route distance or cluster radius.
-      // Enforce strict zone isolation: only allow this order on days that
-      // have NO orders from other zones (or are empty).
-      // This prevents Klang+Ampang style mismatches when geocoding is missing.
-      const dayZones = Object.keys(day.zones).map(Number).filter(z => day.zones[z] > 0);
-      if (dayZones.length > 0 && !dayZones.every(z => z === order.zone)) return false;
-      return true;
-    }
-
-    // Route circuit threshold
-    const testCoords = [...day.coords, { latitude: order.latitude, longitude: order.longitude }];
-    if (estimateDayRouteDistance(testCoords) > MAX_DAILY_ROUTE_KM) return false;
-
-    // Cluster radius — order must be within MAX_CLUSTER_RADIUS_KM of day centroid
-    if (day.center) {
-      const distFromCenter = haversineDistance(order.latitude, order.longitude, day.center.latitude, day.center.longitude);
-      if (distFromCenter > MAX_CLUSTER_RADIUS_KM) return false;
-    }
-
-    return true;
-  };
+  const passesHardConstraints = (day: DayState, order: OrderCoord): boolean =>
+    evaluateSchedulerFeasibility(day, order, SCHEDULER_MAX_POINTS).feasible;
 
   /**
    * Score a candidate day for an order. Lower is better (less travel cost).
@@ -301,34 +243,7 @@ export async function autoSchedule(userId: string): Promise<ScheduleResult> {
    * Route distance is the dominant factor (scaled 0-25). Other factors are kept
    * small so geography wins over density-filling.
    */
-  const scoreDay = (day: DayState, order: OrderCoord): number => {
-    const sameZone = (day.zones[order.zone] || 0) > 0;
-    const zonePenalty = sameZone ? 0 : 10;
-
-    const fillRatio = day.totalPoints / MAX_DAILY_POINTS;
-    const densityBonus = -fillRatio * 2;
-
-    const emptyPenalty = day.totalPoints === 0 ? 5 : 0;
-
-    const dateIdx = workingDays.indexOf(day.date);
-    const dateBonus = dateIdx * 0.05;
-
-    // Route distance cost — dominant factor
-    let geoCost = 0;
-    if (order.latitude && order.longitude) {
-      const testCoords = [...day.coords, { latitude: order.latitude, longitude: order.longitude }];
-      const estRoute = estimateDayRouteDistance(testCoords);
-      // Scale: 0km -> 0, 110km -> 25 (dominates all other factors at threshold)
-      geoCost = (estRoute / MAX_DAILY_ROUTE_KM) * 25;
-    } else {
-      // No coordinates — rely heavily on zone match since we can't
-      // verify geographic proximity. Orders without coords should strongly
-      // prefer same-zone days.
-      geoCost = sameZone ? 3 : 25;
-    }
-
-    return geoCost + zonePenalty + densityBonus + emptyPenalty + dateBonus;
-  };
+  const scoreDay = (day: DayState, order: OrderCoord): number => scoreSchedulerDay(day, order, workingDays.indexOf(day.date));
 
   // Phase A: greedy min-route-cost assignment, zone-by-zone, closest-to-HOME first
   for (const zone of zonesInOrder) {
@@ -336,8 +251,8 @@ export async function autoSchedule(userId: string): Promise<ScheduleResult> {
     // naturally get pushed to new days by the circuit/cluster constraints.
     const HOME = FIXED_LOCATIONS.HOME;
     const zoneOrders = ordersByZone[zone].slice().sort((a, b) => {
-      const distA = a.latitude && a.longitude ? haversineDistance(HOME.latitude, HOME.longitude, a.latitude, a.longitude) : 999;
-      const distB = b.latitude && b.longitude ? haversineDistance(HOME.latitude, HOME.longitude, b.latitude, b.longitude) : 999;
+      const distA = hasCoordinates(a) ? haversineDistance(HOME, a) : 999;
+      const distB = hasCoordinates(b) ? haversineDistance(HOME, b) : 999;
       return distA - distB;
     });
 
@@ -359,7 +274,7 @@ export async function autoSchedule(userId: string): Promise<ScheduleResult> {
         .filter(({ date, day }) => {
           if (!passesHardConstraints(day, order)) return false;
           if (order.isOffice && holidayDates.has(date)) return false;
-          if (order.isOffice && isWeekend(parseISO(date))) return false;
+          if (order.isOffice && isWeekendDate(date)) return false;
           return true;
         });
 
@@ -369,8 +284,9 @@ export async function autoSchedule(userId: string): Promise<ScheduleResult> {
       }
 
       let chosen: { date: string; day: DayState };
-      if (forcedDate && dayMap[forcedDate] && passesHardConstraints(dayMap[forcedDate], order)) {
-        chosen = { date: forcedDate, day: dayMap[forcedDate] };
+      const forcedCandidate = forcedDate ? candidates.find(candidate => candidate.date === forcedDate) : undefined;
+      if (forcedCandidate) {
+        chosen = forcedCandidate;
       } else {
         candidates.sort((a, b) => scoreDay(a.day, order) - scoreDay(b.day, order));
         chosen = candidates[0];
@@ -379,7 +295,7 @@ export async function autoSchedule(userId: string): Promise<ScheduleResult> {
       // Assign
       chosen.day.totalPoints += order.points;
       chosen.day.zones[zone] = (chosen.day.zones[zone] || 0) + 1;
-      if (order.latitude && order.longitude) {
+      if (hasCoordinates(order)) {
         chosen.day.coords.push({ latitude: order.latitude, longitude: order.longitude });
         chosen.day.center = centroid(chosen.day.coords);
       }
@@ -389,16 +305,9 @@ export async function autoSchedule(userId: string): Promise<ScheduleResult> {
   }
 
   // Phase B: merge stranded single-order days into nearby fuller days
-  const scheduledByDate: Record<string, typeof scheduled> = {};
-  for (const s of scheduled) {
-    if (!scheduledByDate[s.date]) scheduledByDate[s.date] = [];
-    scheduledByDate[s.date].push(s);
-  }
-
   for (const date of workingDays) {
     const day = dayMap[date];
-    const items = scheduledByDate[date] || [];
-    const placedHere = items.filter(s => !existingOrders.some(eo => eo.id === s.orderId));
+    const placedHere = scheduled.filter(item => item.date === date);
     if (placedHere.length !== 1 || day.totalPoints <= 1) continue;
 
     const stranded = placedHere[0];
@@ -412,15 +321,15 @@ export async function autoSchedule(userId: string): Promise<ScheduleResult> {
       if (altDay.totalPoints === 0) continue;
       if (!passesHardConstraints(altDay, strandedOrder)) continue;
       if (strandedOrder.isOffice && holidayDates.has(altDate)) continue;
-      if (strandedOrder.isOffice && isWeekend(parseISO(altDate))) continue;
+      if (strandedOrder.isOffice && isWeekendDate(altDate)) continue;
 
-      const costHere = strandedOrder.latitude && strandedOrder.longitude && day.center
-        ? haversineDistance(strandedOrder.latitude, strandedOrder.longitude, day.center.latitude, day.center.longitude)
+      const costHere = hasCoordinates(strandedOrder) && day.center
+        ? haversineDistance(strandedOrder, day.center)
         : 0;
-      const costThere = strandedOrder.latitude && strandedOrder.longitude && altDay.center
-        ? haversineDistance(strandedOrder.latitude, strandedOrder.longitude, altDay.center.latitude, altDay.center.longitude)
+      const costThere = hasCoordinates(strandedOrder) && altDay.center
+        ? haversineDistance(strandedOrder, altDay.center)
         : (altDay.zones[strandedOrder.zone] ? 8 : 20);
-      const altFill = altDay.totalPoints / MAX_DAILY_POINTS;
+      const altFill = altDay.totalPoints / SCHEDULER_MAX_POINTS;
       const score = costThere - costHere - altFill * 5;
       if (score < 0 && (!bestAlt || score < bestAlt.score)) {
         bestAlt = { date: altDate, day: altDay, score };
@@ -431,15 +340,12 @@ export async function autoSchedule(userId: string): Promise<ScheduleResult> {
       day.totalPoints -= strandedOrder.points;
       day.zones[stranded.zone] = (day.zones[stranded.zone] || 0) - 1;
       if (day.zones[stranded.zone] <= 0) delete day.zones[stranded.zone];
-      day.coords = day.coords.filter(c =>
-        !(strandedOrder.latitude && strandedOrder.longitude &&
-          c.latitude === strandedOrder.latitude && c.longitude === strandedOrder.longitude)
-      );
+      if (hasCoordinates(strandedOrder)) day.coords = removeOneCoordinate(day.coords, strandedOrder);
       day.center = centroid(day.coords);
 
       bestAlt.day.totalPoints += strandedOrder.points;
       bestAlt.day.zones[stranded.zone] = (bestAlt.day.zones[stranded.zone] || 0) + 1;
-      if (strandedOrder.latitude && strandedOrder.longitude) {
+      if (hasCoordinates(strandedOrder)) {
         bestAlt.day.coords.push({ latitude: strandedOrder.latitude, longitude: strandedOrder.longitude });
         bestAlt.day.center = centroid(bestAlt.day.coords);
       }
@@ -449,19 +355,19 @@ export async function autoSchedule(userId: string): Promise<ScheduleResult> {
     }
   }
 
-  await db.$transaction(
-    scheduled.map(item =>
-      db.order.update({
-        where: { id: item.orderId },
-        data: { status: "SCHEDULED", scheduledDate: item.date },
-      })
-    )
-  );
+  const persisted = [] as typeof scheduled;
+  for (const item of scheduled) {
+    const result = await db.order.updateMany({ where: { id: item.orderId, status: "PENDING" }, data: { status: "SCHEDULED", scheduledDate: item.date } });
+    if (result.count === 1) persisted.push(item);
+    else {
+      const order = queue.find(candidate => candidate.id === item.orderId);
+      unscheduled.push({ orderId: order?.orderId ?? item.orderId, reason: "Order changed while scheduling; no update applied" });
+    }
+  }
 
-  return { scheduled, unscheduled };
-}
-
-function parseISO(dateStr: string): Date {
-  const [year, month, day] = dateStr.split("-").map(Number);
-  return new Date(year, month - 1, day);
+  const publicScheduled = persisted.map(item => {
+    const order = queue.find(candidate => candidate.id === item.orderId);
+    return { ...item, orderId: order?.orderId ?? item.orderId };
+  });
+  return { scheduled: publicScheduled, unscheduled };
 }

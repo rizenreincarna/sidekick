@@ -381,9 +381,10 @@ export const MAX_DAILY_POINTS = 20;
 export const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: string; borderColor: string; icon: string }> = {
   PENDING:    { label: "Pending",    color: "text-yellow-300", bgColor: "bg-yellow-500/15", borderColor: "border-yellow-500/30", icon: "clock" },
   SCHEDULED:  { label: "Scheduled",  color: "text-cyan-300",   bgColor: "bg-cyan-500/15",   borderColor: "border-cyan-500/30",   icon: "calendar" },
-  CONFIRMED:  { label: "Contacted",  color: "text-emerald-300",bgColor: "bg-emerald-500/15", borderColor: "border-emerald-500/30", icon: "check-circle" },
+  CONTACTED:  { label: "Contacted",  color: "text-emerald-300",bgColor: "bg-emerald-500/15", borderColor: "border-emerald-500/30", icon: "check-circle" },
   BOOKED:     { label: "Booked",     color: "text-violet-300", bgColor: "bg-violet-500/15", borderColor: "border-violet-500/30", icon: "bookmark" },
   COMPLETED:  { label: "Completed",  color: "text-slate-400",  bgColor: "bg-slate-500/15",  borderColor: "border-slate-500/30",  icon: "check-check" },
+  CANCELED:   { label: "Canceled",   color: "text-red-300",    bgColor: "bg-red-500/15",    borderColor: "border-red-500/30",    icon: "x-circle" },
 };
 
 export const SIZE_CONFIG: Record<string, { label: string; points: number; color: string }> = {

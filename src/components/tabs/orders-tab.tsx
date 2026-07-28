@@ -382,7 +382,7 @@ export function OrdersTab({ orders, onRefresh, holidays, offDays, userZones, onV
                 <SelectItem value="ALL">All Status</SelectItem>
                 <SelectItem value="PENDING">Pending</SelectItem>
                 <SelectItem value="SCHEDULED">Scheduled</SelectItem>
-                <SelectItem value="CONFIRMED">Contacted</SelectItem>
+                <SelectItem value="CONTACTED">Contacted</SelectItem>
                 <SelectItem value="BOOKED">Booked</SelectItem>
                 <SelectItem value="COMPLETED">Completed</SelectItem>
                 <SelectItem value="CANCELED">Canceled</SelectItem>
@@ -466,7 +466,7 @@ export function OrdersTab({ orders, onRefresh, holidays, offDays, userZones, onV
             <SelectContent>
               <SelectItem value="PENDING">Pending</SelectItem>
               <SelectItem value="SCHEDULED">Scheduled</SelectItem>
-              <SelectItem value="CONFIRMED">Contacted</SelectItem>
+              <SelectItem value="CONTACTED">Contacted</SelectItem>
               <SelectItem value="BOOKED">Booked</SelectItem>
               <SelectItem value="COMPLETED">Completed</SelectItem>
               <SelectItem value="CANCELED">Canceled</SelectItem>
@@ -573,7 +573,7 @@ export function OrdersTab({ orders, onRefresh, holidays, offDays, userZones, onV
           const statusLabels: Record<string, string> = {
             PENDING: "Pending",
             SCHEDULED: "Scheduled",
-            CONFIRMED: "Contacted",
+            CONTACTED: "Contacted",
             BOOKED: "Booked",
             COMPLETED: "Completed",
             CANCELED: "Canceled",
@@ -630,4 +630,3 @@ export function OrdersTab({ orders, onRefresh, holidays, offDays, userZones, onV
     </div>
   );
 }
-

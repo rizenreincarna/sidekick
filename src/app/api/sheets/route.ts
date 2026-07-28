@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { requireAuth } from "@/lib/session";
 import { syncToSheet, importFromSheet, getSheetsConfig, setSheetsConfig } from "@/lib/google-sheets";
 import { detectZoneWithCustom, getSizePoints } from "@/lib/zones";
+import { canonicalStatusForWrite } from "@/lib/order-status";
 
 export async function GET() {
   const user = await requireAuth();
@@ -51,7 +52,7 @@ export async function POST(request: NextRequest) {
       const sheetOrders = orders.map(o => ({
         orderId: o.orderId, customerName: o.customerName, phone: o.phone,
         address: o.address, city: o.city, size: o.size, isOffice: o.isOffice,
-        zone: o.zone, scheduledDate: o.scheduledDate, status: o.status, notes: o.notes,
+        zone: o.zone, scheduledDate: o.scheduledDate, status: canonicalStatusForWrite(o.status), notes: o.notes,
       }));
       const result = await syncToSheet(sheetOrders, config.spreadsheetId, config.serviceAccount);
       return NextResponse.json(result);
