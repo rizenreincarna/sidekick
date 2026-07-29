@@ -22,6 +22,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetCl
 import { useToast } from "@/hooks/use-toast";
 import { ZONES, STATUS_CONFIG, SIZE_CONFIG, getZoneName, getZoneColor, MAX_DAILY_POINTS, CUSTOM_ZONE_START } from "@/lib/zones";
 import { AiChatPanel, AiSettingsSection } from "@/components/ai-assistant";
+import { MarieAutomationSection } from "@/components/marie-automation-section";
 import { VerificationProgressDrawer } from "@/components/verification-progress";
 import { GeocodeProgressDrawer } from "@/components/geocode-progress";
 import { HeroProfileDialog } from "@/components/hero-profile-dialog";
@@ -1231,6 +1232,17 @@ export function SettingsTab({ holidays, onRefresh, session, onReplayOnboarding, 
       {session?.user?.role === "ADMIN" && (
         <div className="rounded-xl border border-primary/20 bg-card overflow-hidden">
           <AiSettingsSection />
+        </div>
+      )}
+
+      {/* ====== MARIE AUTOMATION (Admin Only) ====== */}
+      {session?.user?.role === "ADMIN" && (
+        <div className="rounded-xl border border-primary/20 bg-card overflow-hidden">
+          <div className="flex items-center gap-2 p-4 border-b border-border">
+            <Bot className="h-5 w-5 text-primary" />
+            <span className="font-semibold">Marie Automation</span>
+          </div>
+          <MarieAutomationSection />
         </div>
       )}
 

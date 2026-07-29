@@ -15,6 +15,7 @@ vi.mock("./db", () => ({
 }));
 
 import { computeMarieDryRun } from "./marie-dry-run";
+import { mytDisplayDate } from "./marie-operations";
 
 const pendingOrder = (index: number) => ({
   id: `id-${index}`,
@@ -80,7 +81,7 @@ describe("computeMarieDryRun read safety", () => {
     expect(activeCall.select).not.toHaveProperty("id");
   });
 
-  it("emits exact draft wording with PII placeholders and no internal terminology", async () => {
+  it("emits a short customer-safe draft with PII placeholders", async () => {
     mocks.orderFindMany.mockImplementation(async (args: { where: Record<string, unknown> }) => {
       if (args.where.status === "PENDING") return [pendingOrder(0)];
       if (args.where.isEvent === true) return [];
@@ -91,10 +92,10 @@ describe("computeMarieDryRun read safety", () => {
     const [plan] = report.plans;
 
     expect(plan.action).toBe("PROPOSE_SCHEDULE");
-    expect(plan.draftMessage).toContain("this is Marie, an assistant");
     expect(plan.draftMessage).toContain("[CUSTOMER_NAME]");
-    expect(plan.draftMessage).toContain("[PICKUP_ADDRESS]");
-    expect(plan.draftMessage).toContain(plan.proposedDate!);
+    // Customer-facing wording uses "31 Jul 2026", not the ISO planning date.
+    expect(plan.draftMessage).toContain(mytDisplayDate(plan.proposedDate!));
+    expect(plan.draftMessage).toContain("erth.app");
     // No PII and no internal terminology leaks into the report.
     expect(plan.draftMessage).not.toContain("0123456789");
     expect(plan.draftMessage).not.toMatch(/points|zone|capacity|route/i);

@@ -12,6 +12,7 @@ export async function POST(request: Request) {
   const length = Number(request.headers.get("content-length") ?? 0);
   if (length > MAX_BODY_BYTES) return NextResponse.json({ error: "Payload too large" }, { status: 413 });
   const raw = await request.text();
+  console.log("[marie/waha-webhook] RAW PAYLOAD:", raw.slice(0, 500));
   if (Buffer.byteLength(raw) > MAX_BODY_BYTES) return NextResponse.json({ error: "Payload too large" }, { status: 413 });
   let json: unknown;
   try { json = JSON.parse(raw); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }

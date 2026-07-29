@@ -23,6 +23,8 @@ export interface MariePolicyConfig {
   normalCapacity: number;
   maxCapacity: number;
   pilotAllowlist: string[];
+  contactMode: "ALL" | "WHITELIST" | "STOPPED";
+  orderAllowlist: string[];
 }
 
 export interface PlanningOrder {
@@ -129,6 +131,21 @@ export function checkModeEligibility(
   return { eligible: true, reason: "Eligible" };
 }
 
+/**
+ * Order-level contact gate. Runs after mode eligibility.
+ * - "ALL": every order may proceed.
+ * - "WHITELIST": only orders in the explicit list may proceed.
+ * - "STOPPED": no order may proceed; the sweep still handles stale CONTACTED orders.
+ */
+export function checkContactModeGate(
+  config: Pick<MariePolicyConfig, "contactMode" | "orderAllowlist">,
+  orderId: string,
+): { allowed: boolean; reason: string } {
+  if (config.contactMode === "STOPPED") return { allowed: false, reason: "Automation stopped" };
+  if (config.contactMode === "WHITELIST" && !config.orderAllowlist.includes(orderId)) return { allowed: false, reason: "Order not in whitelist" };
+  return { allowed: true, reason: "Order allowed by contact mode" };
+}
+
 export function validateLifecycleTransition(from: unknown, to: unknown): boolean {
   return canTransitionOrderStatus(from, to);
 }
@@ -146,11 +163,72 @@ export function assessCapacity(currentPoints: number, addedPoints: number): "NOR
  * confirmation, and never invents an exact arrival time. Uses no internal terminology
  * such as points, zones, capacity, or routing.
  */
+export const PICKUP_WINDOW_START_HOUR = 10;
+export const PICKUP_WINDOW_END_HOUR = 16;
+export const NO_REPLY_CANCEL_HOURS = 24;
+/** Final nudge fires 2 hours before the 24-hour deadline, i.e. at 22 hours. */
+export const FINAL_NUDGE_HOURS = NO_REPLY_CANCEL_HOURS - 2;
+
+export const FINAL_NUDGE_TEMPLATE =
+  "Hi {customerName}, just a friendly reminder about your ERTH pickup for order {orderRef} "
+  + "on {displayDate} ({weekday}), between 10am and 4pm.\n\n"
+  + "We have not received your confirmation yet. Please reply to confirm within the next 2 hours, "
+  + "otherwise this order will be canceled automatically. Thank you!";
+
+export function renderFinalNudgeDraft(values: {
+  customerName: string;
+  orderRef: string;
+  proposedDate: string;
+}): string {
+  return renderMessageTemplate(FINAL_NUDGE_TEMPLATE, {
+    ...values,
+    weekday: mytWeekday(values.proposedDate),
+    displayDate: mytDisplayDate(values.proposedDate),
+  });
+}
+
+export type NoReplyAction = "WAIT" | "SEND_FINAL_NUDGE" | "CANCEL";
+
+/**
+ * Deterministic no-reply timeline anchored on when the first contact was accepted by the
+ * provider. A customer reply always stops the clock; the nudge must have been sent before
+ * cancellation is permitted, so silence can never cancel an order that was never warned.
+ */
+export function resolveNoReplyAction(input: {
+  contactedAt: Date;
+  now: Date;
+  customerReplied: boolean;
+  finalNudgeSentAt: Date | null;
+  /** When false (STOPPED mode where outreach is halted), a cancel never requires a nudge. */
+  requireNudge?: boolean;
+}): { action: NoReplyAction; reason: string } {
+  if (input.customerReplied) {
+    return { action: "WAIT", reason: "Customer replied; no-reply timeline does not apply" };
+  }
+  const requireNudge = input.requireNudge !== false;
+  const elapsedHours = (input.now.getTime() - input.contactedAt.getTime()) / 3_600_000;
+  if (elapsedHours >= NO_REPLY_CANCEL_HOURS) {
+    if (input.finalNudgeSentAt !== null || !requireNudge) {
+      return { action: "CANCEL", reason: `No reply within ${NO_REPLY_CANCEL_HOURS}h${requireNudge ? " after a final nudge" : ""}` };
+    }
+    // Never cancel without having warned the customer first.
+    return { action: "SEND_FINAL_NUDGE", reason: "Deadline reached but final nudge was never sent" };
+  }
+  if (elapsedHours >= FINAL_NUDGE_HOURS && input.finalNudgeSentAt === null) {
+    return { action: "SEND_FINAL_NUDGE", reason: `No reply after ${FINAL_NUDGE_HOURS}h; 2h warning before cancellation` };
+  }
+  return { action: "WAIT", reason: "Within the reply window" };
+}
+export const ERTH_WEBSITE = "erth.app";
+
+/**
+ * Shortened to a single compact WhatsApp message — under ~300 chars — to reduce
+ * spam-score vs. the previous two-paragraph version. Customer wa.me link approach:
+ * the customer initiates, Marie replies within a normal conversation length.
+ */
 export const INITIAL_CONTACT_TEMPLATE =
-  "Hi {customerName}, this is Marie, an assistant for the ERTH pickup service. "
-  + "For your order {orderRef}, we would like to schedule your pickup on {weekday}, {proposedDate}. "
-  + "Pickup address: {address}. "
-  + "Could you confirm this date and address, or let us know a day that suits you better? Thank you.";
+  "Hi {customerName}, Marie from ERTH. Your pickup for order {orderRef} is set for {displayDate} ({weekday}), 10am-4pm. "
+  + "Pls reply to confirm. T&C: erth.app";
 
 /**
  * Renders the exact outbound wording for operator review with PII replaced by
@@ -167,7 +245,14 @@ export function renderRedactedContactDraft(proposedDate: string): string {
 }
 
 export function mytWeekday(date: string): string {
-  return new Date(`${date}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", timeZone: "UTC" });
+  return new Date(`${date}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", timeZone: "UTC" });
+}
+
+/** Customer-facing date, e.g. "31 Jul 2026". Avoids ambiguous numeric formats. */
+export function mytDisplayDate(date: string): string {
+  return new Date(`${date}T00:00:00Z`).toLocaleDateString("en-GB", {
+    day: "numeric", month: "short", year: "numeric", timeZone: "UTC",
+  });
 }
 
 export function renderInitialContactDraft(values: {
@@ -179,6 +264,7 @@ export function renderInitialContactDraft(values: {
   return renderMessageTemplate(INITIAL_CONTACT_TEMPLATE, {
     ...values,
     weekday: mytWeekday(values.proposedDate),
+    displayDate: mytDisplayDate(values.proposedDate),
   });
 }
 
@@ -187,6 +273,74 @@ export function renderMessageTemplate(template: string, values: Record<string, s
     if (!(key in values)) throw new Error(`Missing template value: ${key}`);
     return values[key];
   });
+}
+
+/** Admin contact for quoting working items under 5 years old. */
+export const ERTH_ADMIN_QUOTE_PHONE = "+60142211446";
+
+/** A device is "working" for reward purposes only if it is under 5 years old. */
+export const WORKING_ITEM_AGE_YEARS = 5;
+
+/**
+ * Published reward payouts. Deterministic lookup table: Marie must quote from this and
+ * never invent or interpolate a price. Per-kg items are priced by weight, not per unit.
+ */
+export const REWARD_TABLE: ReadonlyArray<{ item: string; amount: number; unit: "unit" | "kg" }> = [
+  { item: "Server", amount: 15, unit: "unit" },
+  { item: "All-In-One Computer", amount: 10, unit: "unit" },
+  { item: "CPU", amount: 10, unit: "unit" },
+  { item: "Laptop", amount: 10, unit: "unit" },
+  { item: "Projector", amount: 5, unit: "unit" },
+  { item: "Flatscreen Monitor", amount: 5, unit: "unit" },
+  { item: "Flatscreen TV (up to 55 inch)", amount: 5, unit: "unit" },
+  { item: "Tablet", amount: 5, unit: "unit" },
+  { item: "Smart Phone", amount: 5, unit: "unit" },
+  { item: "Inkjet Cartridge (HP/Canon)", amount: 5, unit: "unit" },
+  { item: "Mobile Phone", amount: 2, unit: "unit" },
+  { item: "Printer", amount: 2, unit: "unit" },
+  { item: "Other (Cable/Wire)", amount: 1, unit: "kg" },
+  { item: "Other (Mix)", amount: 0.5, unit: "kg" },
+];
+
+export function formatRewardAmount(entry: { amount: number; unit: "unit" | "kg" }): string {
+  const value = Number.isInteger(entry.amount) ? String(entry.amount) : entry.amount.toFixed(2);
+  return entry.unit === "kg" ? `RM ${value}/kg` : `RM ${value}`;
+}
+
+/** Exact published reward for an item, or null when the item is not listed. */
+export function lookupReward(item: string): { item: string; amount: number; unit: "unit" | "kg" } | null {
+  const needle = item.trim().toLowerCase();
+  if (!needle) return null;
+  return REWARD_TABLE.find(entry => entry.item.toLowerCase() === needle)
+    ?? REWARD_TABLE.find(entry => entry.item.toLowerCase().startsWith(needle))
+    ?? null;
+}
+
+export function renderRewardTable(): string {
+  return REWARD_TABLE.map(entry => `${entry.item}: ${formatRewardAmount(entry)}`).join(" | ");
+}
+
+/**
+ * Working-item pricing rule. Items over 5 years old take the published scrap reward;
+ * newer working items must be quoted by admin, so Marie must not guess a price.
+ */
+export function resolveWorkingItemPolicy(input: { claimedWorking: boolean; ageYears: number | null }):
+  { outcome: "PUBLISHED_RATE" | "ADMIN_QUOTE" | "UNKNOWN_AGE"; message: string } {
+  if (!input.claimedWorking) {
+    return { outcome: "PUBLISHED_RATE", message: "Non-working items are paid at the published rate." };
+  }
+  if (input.ageYears === null) {
+    return {
+      outcome: "UNKNOWN_AGE",
+      message: `Could you tell us roughly how old the item is? If it is under ${WORKING_ITEM_AGE_YEARS} years old and still working, our admin can quote you at ${ERTH_ADMIN_QUOTE_PHONE}.`,
+    };
+  }
+  return input.ageYears >= WORKING_ITEM_AGE_YEARS
+    ? { outcome: "PUBLISHED_RATE", message: `Items ${WORKING_ITEM_AGE_YEARS} years or older are paid at the published rate, working or not.` }
+    : {
+      outcome: "ADMIN_QUOTE",
+      message: `For working items under ${WORKING_ITEM_AGE_YEARS} years old, please contact our admin at ${ERTH_ADMIN_QUOTE_PHONE} for a quote.`,
+    };
 }
 
 export function classifyInboundIntent(body: string, awaitingCancellationConfirmation = false): InboundIntent {

@@ -146,11 +146,14 @@ model MarieAutomationConfig {
   maxMessagesPerRun        Int      @default(10)
   maxMessagesPerHour       Int      @default(20)
   maxMessagesPerDay        Int      @default(100)
+  maxMessagesPerTick       Int      @default(3)
   maxRetries               Int      @default(3)
   wahaSessionName          String?
   telegramOwnerId          String?
   escalationEnabled        Boolean  @default(false)
   inboundProcessingEnabled Boolean  @default(false)
+  contactMode              String   @default("WHITELIST")
+  orderAllowlist           String   @default("[]")
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
 }

@@ -20,10 +20,15 @@ export async function PUT(request: NextRequest) {
   if (!user) return unauthorized(error);
   try {
     const config = marieConfigSchema.parse(await request.json());
+    const serialized = {
+      ...config,
+      pilotAllowlist: JSON.stringify(config.pilotAllowlist),
+      orderAllowlist: JSON.stringify(config.orderAllowlist),
+    };
     await db.marieAutomationConfig.upsert({
       where: { id: "default" },
-      create: { id: "default", ...config, pilotAllowlist: JSON.stringify(config.pilotAllowlist) },
-      update: { ...config, pilotAllowlist: JSON.stringify(config.pilotAllowlist) },
+      create: { id: "default", ...serialized },
+      update: serialized,
     });
     await logAudit({
       userId: user.id,
@@ -35,11 +40,13 @@ export async function PUT(request: NextRequest) {
         enabled: config.enabled,
         inboundProcessingEnabled: config.inboundProcessingEnabled,
         mode: config.mode,
+        contactMode: config.contactMode,
         contactHours: `${config.contactStartHour}-${config.contactEndHour}`,
         limits: { run: config.maxMessagesPerRun, hour: config.maxMessagesPerHour, day: config.maxMessagesPerDay, retries: config.maxRetries },
         wahaSessionConfigured: Boolean(config.wahaSessionName),
         telegramOwnerConfigured: Boolean(config.telegramOwnerId),
         pilotAllowlistCount: config.pilotAllowlist.length,
+        orderAllowlistCount: config.orderAllowlist.length,
       }),
     });
     return NextResponse.json(config);

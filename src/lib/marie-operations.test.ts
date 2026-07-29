@@ -1,14 +1,19 @@
 import { describe, expect, it } from "vitest";
 import {
   assessCapacity,
+  checkContactModeGate,
   checkModeEligibility,
   classifyInboundIntent,
+  formatRewardAmount,
   generateDryRunPlans,
   generateUserIsolatedDryRunPlans,
   isWithinMytContactWindow,
+  lookupReward,
   normalizeMalaysianPhone,
   renderInitialContactDraft,
   renderMessageTemplate,
+  renderRewardTable,
+  resolveWorkingItemPolicy,
   validateLifecycleTransition,
 } from "./marie-operations";
 
@@ -46,6 +51,18 @@ describe("Marie policies", () => {
     expect(checkModeEligibility({ enabled: true, mode: "DRY_RUN", pilotAllowlist: [] }, pendingOrder.phone).eligible).toBe(false);
     expect(checkModeEligibility({ enabled: true, mode: "PILOT", pilotAllowlist: ["0123456789"] }, pendingOrder.phone).eligible).toBe(true);
     expect(checkModeEligibility({ enabled: true, mode: "LIVE", pilotAllowlist: [] }, pendingOrder.phone).eligible).toBe(true);
+  });
+
+  it("blocks orders outside the whitelist in WHITELIST mode", () => {
+    expect(checkContactModeGate({ contactMode: "WHITELIST", orderAllowlist: ["26176"] }, "26176").allowed).toBe(true);
+    expect(checkContactModeGate({ contactMode: "WHITELIST", orderAllowlist: ["26176"] }, "99999").allowed).toBe(false);
+  });
+
+  it("lets every order through in ALL mode and none in STOPPED mode", () => {
+    expect(checkContactModeGate({ contactMode: "ALL", orderAllowlist: [] }, "26176").allowed).toBe(true);
+    expect(checkContactModeGate({ contactMode: "ALL", orderAllowlist: [] }, "99999").allowed).toBe(true);
+    expect(checkContactModeGate({ contactMode: "STOPPED", orderAllowlist: ["26176"] }, "26176").allowed).toBe(false);
+    expect(checkContactModeGate({ contactMode: "STOPPED", orderAllowlist: [] }, "26176").allowed).toBe(false);
   });
 
   it("applies capacity policy and lifecycle rules", () => {
@@ -100,17 +117,39 @@ describe("Marie policies", () => {
     expect(plan.proposedDate).not.toBe("2026-07-30");
   });
 
-  it("renders a transparent initial contact draft with weekday and no invented time", () => {
+  it("renders a short first-contact draft with the pickup date only", () => {
     const draft = renderInitialContactDraft({
       customerName: "Aisha",
       orderRef: "12345",
       proposedDate: "2026-07-31",
       address: "1 Jalan Test",
     });
-    expect(draft).toContain("this is Marie, an assistant for the ERTH pickup service");
-    expect(draft).toContain("Friday, 2026-07-31");
-    expect(draft).toContain("1 Jalan Test");
-    expect(draft).not.toMatch(/\b\d{1,2}[:.]\d{2}\s*(am|pm)?\b/i);
+    expect(draft).toContain("31 Jul 2026");
+    expect(draft).toContain("Fri");
+    expect(draft).not.toMatch(/points|zone|capacity|route/i);
+    expect(draft).not.toMatch(/points|zone|capacity|route/i);
+  });
+
+  it("quotes rewards only from the published table", () => {
+    expect(lookupReward("Server")).toMatchObject({ amount: 15, unit: "unit" });
+    expect(lookupReward("laptop")).toMatchObject({ amount: 10, unit: "unit" });
+    expect(lookupReward("Mobile Phone")).toMatchObject({ amount: 2, unit: "unit" });
+    expect(lookupReward("Other (Mix)")).toMatchObject({ amount: 0.5, unit: "kg" });
+    expect(lookupReward("Nuclear Reactor")).toBeNull();
+    expect(lookupReward("")).toBeNull();
+  });
+
+  it("formats per-unit and per-kg rewards distinctly", () => {
+    expect(formatRewardAmount({ amount: 15, unit: "unit" })).toBe("RM 15");
+    expect(formatRewardAmount({ amount: 0.5, unit: "kg" })).toBe("RM 0.50/kg");
+    expect(renderRewardTable()).toContain("Server: RM 15");
+  });
+
+  it("routes working items under 5 years to admin instead of guessing a price", () => {
+    expect(resolveWorkingItemPolicy({ claimedWorking: true, ageYears: 2 })).toMatchObject({ outcome: "ADMIN_QUOTE" });
+    expect(resolveWorkingItemPolicy({ claimedWorking: true, ageYears: 5 })).toMatchObject({ outcome: "PUBLISHED_RATE" });
+    expect(resolveWorkingItemPolicy({ claimedWorking: false, ageYears: null })).toMatchObject({ outcome: "PUBLISHED_RATE" });
+    expect(resolveWorkingItemPolicy({ claimedWorking: true, ageYears: null })).toMatchObject({ outcome: "UNKNOWN_AGE" });
   });
 
   it("produces opaque sequential plans without mutating inputs", () => {

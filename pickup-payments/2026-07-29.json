@@ -1,0 +1,14 @@
+[
+  {
+    "type": "payment",
+    "amount": 40,
+    "note": "26073 - Banting",
+    "seq": 1
+  },
+  {
+    "type": "payment",
+    "amount": 269,
+    "note": "26175 - Shah Alam",
+    "seq": 2
+  }
+]

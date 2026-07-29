@@ -2,10 +2,24 @@ import { randomUUID } from "node:crypto";
 import type { AutomationJob, CustomerConversation, Order, Prisma, PrismaClient } from "@prisma/client";
 import { db } from "./db";
 import { getMarieConfig } from "./marie-config";
-import { checkModeEligibility, isWithinMytContactWindow, normalizeMalaysianPhone } from "./marie-operations";
+import {
+  checkModeEligibility,
+  isWithinMytContactWindow,
+  normalizeMalaysianPhone,
+  renderFinalNudgeDraft,
+  resolveNoReplyAction,
+} from "./marie-operations";
+import { proposeSchedule, persistScheduleProposal } from "./marie-scheduler";
+import { antiBlockJitter, getAntiBlockConfig } from "./marie-anti-block";
 
 export interface MessageProvider {
   sendText(input: { recipient: string; body: string; idempotencyKey: string }): Promise<{ providerMessageId: string }>;
+  /** Send "seen" indicator to the contact before processing. Optional. */
+  sendSeen?(recipient: string): Promise<void>;
+  /** Start typing indicator for a short interval. Optional. */
+  startTyping?(recipient: string): Promise<void>;
+  /** Stop typing indicator. Optional. */
+  stopTyping?(recipient: string): Promise<void>;
 }
 
 export interface WorkerConfig {
@@ -18,16 +32,72 @@ export interface WorkerConfig {
   maxMessagesPerHour: number;
   maxMessagesPerDay: number;
   maxRetries: number;
+  /** Set false to skip typing indicators; used in tests to keep it fast. */
+  typingIndicators?: boolean;
+  /** ALL / WHITELIST / STOPPED — operator-level contact gate. */
+  contactMode?: "ALL" | "WHITELIST" | "STOPPED";
+  /** Order numbers (e.g. "26176") Marie may contact when in WHITELIST mode. */
+  orderAllowlist?: string[];
+  /** Hard cap on outbound sends per worker tick. Defaults to 3 (anti-ban). */
+  maxMessagesPerTick?: number;
 }
 
 export class WahaProvider implements MessageProvider {
   constructor(private readonly apiUrl: string, private readonly apiKey: string, private readonly session = "naz") {}
 
-  async sendText(input: { recipient: string; body: string; idempotencyKey: string }) {
+  private toChatId(recipient: string): string {
+    const local = recipient.replace(/^\+/, "");
+    return `${local}@c.us`;
+  }
+
+  private headers(): HeadersInit {
+    return { "content-type": "application/json", "x-api-key": this.apiKey };
+  }
+
+  async sendSeen(recipient: string): Promise<void> {
+    try {
+      await fetch(`${this.apiUrl.replace(/\/$/, "")}/api/sendSeen`, {
+        method: "POST",
+        headers: this.headers(),
+        body: JSON.stringify({ session: this.session, chatId: this.toChatId(recipient) }),
+        signal: AbortSignal.timeout(10_000),
+      });
+    } catch {
+      // Never block the send path for typing indicators.
+    }
+  }
+
+  async startTyping(recipient: string): Promise<void> {
+    try {
+      await fetch(`${this.apiUrl.replace(/\/$/, "")}/api/startTyping`, {
+        method: "POST",
+        headers: this.headers(),
+        body: JSON.stringify({ session: this.session, chatId: this.toChatId(recipient) }),
+        signal: AbortSignal.timeout(10_000),
+      });
+    } catch {
+      // Never block the send path for typing indicators.
+    }
+  }
+
+  async stopTyping(recipient: string): Promise<void> {
+    try {
+      await fetch(`${this.apiUrl.replace(/\/$/, "")}/api/stopTyping`, {
+        method: "POST",
+        headers: this.headers(),
+        body: JSON.stringify({ session: this.session, chatId: this.toChatId(recipient) }),
+        signal: AbortSignal.timeout(10_000),
+      });
+    } catch {
+      // Never block the send path for typing indicators.
+    }
+  }
+
+  async sendText(input: { recipient: string; body: string; idempotencyKey: string }): Promise<{ providerMessageId: string }> {
     const response = await fetch(`${this.apiUrl.replace(/\/$/, "")}/api/sendText`, {
       method: "POST",
-      headers: { "content-type": "application/json", "x-api-key": this.apiKey },
-      body: JSON.stringify({ session: this.session, chatId: `${input.recipient.replace(/^\+/, "")}@c.us`, text: input.body, idempotencyKey: input.idempotencyKey }),
+      headers: this.headers(),
+      body: JSON.stringify({ session: this.session, chatId: this.toChatId(input.recipient), text: input.body, idempotencyKey: input.idempotencyKey }),
       signal: AbortSignal.timeout(15_000),
     });
     if (!response.ok) throw new Error(`WAHA_HTTP_${response.status}`);
@@ -38,8 +108,11 @@ export class WahaProvider implements MessageProvider {
   }
 }
 
-export async function enqueueOutbound(input: { orderId: string; conversationId: string; body: string; idempotencyKey: string; runAfter?: Date }) {
-  return db.$transaction(async tx => {
+export async function enqueueOutbound(
+  input: { orderId: string; conversationId: string; body: string; idempotencyKey: string; runAfter?: Date },
+  database: PrismaClient = db,
+) {
+  return database.$transaction(async tx => {
     const message = await tx.customerMessage.upsert({
       where: { idempotencyKey: input.idempotencyKey },
       create: { conversationId: input.conversationId, direction: "OUTBOUND", idempotencyKey: input.idempotencyKey, body: input.body, deliveryState: "QUEUED" },
@@ -117,6 +190,7 @@ export function assessOutboundPolicy(input: {
   config: WorkerConfig;
   now: Date;
   phone: string | null;
+  orderId?: string | null;
   orderStatus: string | null;
   conversationActive: boolean;
   activeHold: boolean;
@@ -127,6 +201,8 @@ export function assessOutboundPolicy(input: {
   if (!phone) return "INVALID_RECIPIENT";
   const mode = checkModeEligibility(config, phone);
   if (!mode.eligible || config.mode !== "PILOT") return "MODE_GATE";
+  if (config.contactMode === "STOPPED") return "CONTACT_MODE_STOPPED";
+  if (config.contactMode === "WHITELIST" && input.orderId && !config.orderAllowlist?.includes(input.orderId)) return "ORDER_NOT_WHITELISTED";
   if (!isWithinMytContactWindow(now, config.contactStartHour, config.contactEndHour)) return "CONTACT_WINDOW";
   if (input.orderStatus !== "SCHEDULED" && input.orderStatus !== "CONTACTED") return "ORDER_STATUS";
   if (!input.conversationActive) return "CONVERSATION_PAUSED";
@@ -141,7 +217,7 @@ async function eligibility(job: LoadedJob, config: WorkerConfig, now: Date, data
   const phone = conversation?.normalizedPhone ? normalizeMalaysianPhone(conversation.normalizedPhone) : null;
   if (!conversation || !order) return "ORDER_STATUS";
   const activeHold = await database.orderHold.count({ where: { orderId: order.id, state: "ACTIVE" } });
-  return assessOutboundPolicy({ config, now, phone, orderStatus: order.status, conversationActive: conversation.state === "ACTIVE" && !conversation.pausedAt, activeHold: activeHold > 0, hourCount: 0, dayCount: 0 });
+  return assessOutboundPolicy({ config, now, phone, orderId: order.orderId, orderStatus: order.status, conversationActive: conversation.state === "ACTIVE" && !conversation.pausedAt, activeHold: activeHold > 0, hourCount: 0, dayCount: 0 });
 }
 
 function mytBuckets(now: Date): { hourBucket: string; dayBucket: string } {
@@ -201,7 +277,7 @@ export function nextMytContactStart(now: Date, startHour: number, endHour: numbe
   return new Date(now.getTime() + 24 * 60 * 60_000);
 }
 
-const PERMANENT_GATES = new Set(["INVALID_RECIPIENT", "MODE_GATE", "ORDER_STATUS", "CONVERSATION_PAUSED"]);
+const PERMANENT_GATES = new Set(["INVALID_RECIPIENT", "MODE_GATE", "CONTACT_MODE_STOPPED", "ORDER_NOT_WHITELISTED", "ORDER_STATUS", "CONVERSATION_PAUSED"]);
 
 async function enterSendingState(tx: Prisma.TransactionClient, input: { job: LoadedJob; messageId: string; leaseToken: string; now: Date }): Promise<boolean> {
   const fresh = await tx.automationJob.findFirst({
@@ -251,7 +327,40 @@ export async function executeClaimedJob(jobId: string, leaseToken: string, provi
     await database.automationJob.updateMany({ where: { id: job.id, leaseToken }, data: { state: "CANCELED", leaseToken: null, leaseUntil: null, lastErrorCode: "INCONSISTENT_JOB_GRAPH" } });
     return { outcome: "CANCELED" as const, reason: "INCONSISTENT_JOB_GRAPH" };
   }
-  const reserved = await reserveOutboundRate({ userId: order.userId, conversationId: job.conversation.id, messageId: message.id, maxHour: config.maxMessagesPerHour, maxDay: config.maxMessagesPerDay, now }, database);
+  // Anti-blocking guard: Marie must NEVER initiate. Only outbound after customer has texted first.
+  const jobConversation = job.conversation;
+  const hasCustomerInbound = await database.customerMessage.findFirst({
+    where: { conversationId: jobConversation.id, direction: "INBOUND" },
+    select: { id: true },
+  });
+  if (!hasCustomerInbound) {
+    // The customer hasn't messaged Marie yet. Block this send.
+    await database.$transaction(async tx => {
+      await tx.customerMessage.update({
+        where: { id: message.id },
+        data: { deliveryState: "BLOCKED_NO_INBOUND" },
+      });
+      await tx.automationJob.updateMany({
+        where: { id: job.id, leaseToken },
+        data: { state: "CANCELED", leaseToken: null, leaseUntil: null, lastErrorCode: "NO_INBOUND" },
+      });
+      await tx.automationEvent.create({
+        data: {
+          orderId: order.id,
+          conversationId: jobConversation.id,
+          eventType: "OUTBOUND_BLOCKED_NO_INBOUND",
+          actor: "MARIE",
+          idempotencyKey: `anti-block:${message.id}`,
+          beforeState: message.deliveryState,
+          afterState: "BLOCKED_NO_INBOUND",
+          reasonCode: "ANTI_BLOCKING",
+        },
+      });
+    });
+    return { outcome: "GATED" as const, reason: "NO_INBOUND" };
+  }
+
+  const reserved = await reserveOutboundRate({ userId: order.userId, conversationId: jobConversation.id, messageId: message.id, maxHour: config.maxMessagesPerHour, maxDay: config.maxMessagesPerDay, now }, database);
   if (!reserved) {
     await database.automationJob.updateMany({ where: { id: job.id, leaseToken }, data: { state: "PENDING", leaseToken: null, leaseUntil: null, lastErrorCode: "RATE_LIMIT", runAfter: new Date(now.getTime() + 60 * 60_000) } });
     return { outcome: "GATED" as const, reason: "RATE_LIMIT" };
@@ -259,14 +368,26 @@ export async function executeClaimedJob(jobId: string, leaseToken: string, provi
   let providerCalled = false;
   let providerMessageId: string | null = null;
   try {
+    // Anti-blocking sequence: seen -> typing -> jittered delay -> send -> stopTyping.
+    const antiBlock = getAntiBlockConfig();
+    const typingIndicatorsOn = antiBlock.typingIndicators && config.typingIndicators !== false;
+    await provider.sendSeen?.(job.conversation.normalizedPhone!).catch(() => null);
+    await provider.startTyping?.(job.conversation.normalizedPhone!).catch(() => null);
+    if (typingIndicatorsOn) {
+      const delayMs = antiBlockJitter(antiBlock.minInterMessageMs, antiBlock.maxInterMessageMs);
+      if (delayMs > 0) await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+
     const enteredSending = await database.$transaction(tx => enterSendingState(tx, { job, messageId: message.id, leaseToken, now }));
     if (!enteredSending) {
+      await provider.stopTyping?.(job.conversation.normalizedPhone!).catch(() => null);
       await database.automationRateReservation.deleteMany({ where: { messageId: message.id } });
       return { outcome: "LOST_LEASE" as const };
     }
     providerCalled = true;
     const ack = await provider.sendText({ recipient: job.conversation.normalizedPhone!, body: message.body!, idempotencyKey: message.idempotencyKey });
     providerMessageId = ack.providerMessageId;
+    await provider.stopTyping?.(job.conversation.normalizedPhone!).catch(() => null);
     await database.$transaction(async tx => {
       const ownsLease = await tx.automationJob.findFirst({ where: { id: job.id, state: "SENDING", leaseToken } });
       if (!ownsLease) throw new Error("LOST_LEASE_AFTER_SEND");
@@ -307,21 +428,218 @@ export async function executeClaimedJob(jobId: string, leaseToken: string, provi
   }
 }
 
+/**
+ * No-reply sweep: sends the 22-hour final nudge and cancels at 24 hours.
+ *
+ * Cancellation is destructive, so every decision comes from the deterministic
+ * `resolveNoReplyAction` policy rather than any LLM. Only CONTACTED orders are considered:
+ * BOOKED customers have already agreed and are operator-owned, so they are never swept.
+ * Each action is guarded by a unique idempotency key, so a restart or overlapping cron run
+ * cannot double-nudge or double-cancel.
+ */
+export async function runNoReplySweep(options: {
+  config?: WorkerConfig;
+  now?: Date;
+  database?: PrismaClient;
+} = {}) {
+  const now = options.now ?? new Date();
+  const config = options.config ?? await getMarieConfig();
+  const database = options.database ?? db;
+  if (!config.enabled || config.mode !== "PILOT") {
+    return { state: config.enabled ? config.mode : "DISABLED", nudged: 0, canceled: 0 };
+  }
+
+  // Only orders Marie herself contacted and that are still awaiting a reply.
+  const candidates = await database.customerConversation.findMany({
+    where: { state: "ACTIVE", order: { status: "CONTACTED" } },
+    include: { order: true, messages: { orderBy: { createdAt: "asc" } } },
+  });
+
+  let nudged = 0;
+  let canceled = 0;
+
+  for (const conversation of candidates) {
+    const order = conversation.order;
+    if (!order) continue;
+
+    const firstContact = conversation.messages.find(
+      message => message.direction === "OUTBOUND" && message.deliveryState === "SENT",
+    );
+    if (!firstContact) continue;
+
+    const gate = checkModeEligibility(config, order.phone);
+    if (!gate.eligible) continue;
+    // STOPPED halts outreach (nudges) but not the auto-cancel safety valve.
+    // WHITELIST also filters the sweep — an un-whitelisted order must not be
+    // cashed out just because it's in the system.
+    if (config.contactMode === "WHITELIST" && !config.orderAllowlist?.includes(order.orderId)) continue;
+
+    const nudge = conversation.messages.find(
+      message => message.direction === "OUTBOUND" && message.idempotencyKey.startsWith("nudge:"),
+    );
+    const decision = resolveNoReplyAction({
+      contactedAt: firstContact.createdAt,
+      now,
+      customerReplied: conversation.messages.some(message => message.direction === "INBOUND"),
+      finalNudgeSentAt: nudge?.createdAt ?? null,
+      // STOPPED = show the customer no more messages; silently cancel stale orders.
+      requireNudge: config.contactMode !== "STOPPED",
+    });
+
+    if (decision.action === "SEND_FINAL_NUDGE") {
+      if (config.contactMode === "STOPPED") continue; // No outreach while stopped
+      await enqueueOutbound({
+        orderId: order.id,
+        conversationId: conversation.id,
+        body: renderFinalNudgeDraft({
+          customerName: order.customerName,
+          orderRef: order.orderId,
+          proposedDate: order.scheduledDate ?? "",
+        }),
+        idempotencyKey: `nudge:${order.id}`,
+        runAfter: isWithinMytContactWindow(now, config.contactStartHour, config.contactEndHour)
+          ? now
+          : nextMytContactStart(now, config.contactStartHour, config.contactEndHour),
+      }, database);
+      nudged++;
+      continue;
+    }
+
+    if (decision.action === "CANCEL") {
+      await database.$transaction(async tx => {
+        // Fresh read plus status guard: never cancel an order that moved on meanwhile.
+        const transitioned = await tx.order.updateMany({
+          where: { id: order.id, status: "CONTACTED" },
+          data: { status: "CANCELED" },
+        });
+        if (transitioned.count !== 1) return;
+        await tx.customerConversation.update({
+          where: { id: conversation.id },
+          data: { state: "CLOSED" },
+        });
+        await tx.automationEvent.create({
+          data: {
+            orderId: order.id,
+            conversationId: conversation.id,
+            eventType: "AUTO_CANCELED_NO_REPLY",
+            actor: "MARIE",
+            idempotencyKey: `auto-cancel:${order.id}`,
+            beforeState: "CONTACTED",
+            afterState: "CANCELED",
+            reasonCode: "NO_REPLY_24H",
+            metadata: JSON.stringify({
+              contactedAt: firstContact.createdAt.toISOString(),
+              finalNudgeAt: nudge?.createdAt.toISOString() ?? null,
+              reason: decision.reason,
+            }),
+          },
+        });
+        canceled++;
+      });
+    }
+  }
+
+  return { state: "COMPLETE", nudged, canceled };
+}
+
 export async function runMarieWorker(options: { provider?: MessageProvider; config?: WorkerConfig; now?: Date } = {}) {
   const now = options.now ?? new Date();
   const config = options.config ?? await getMarieConfig();
-  if (!config.enabled || config.mode !== "PILOT") return { state: config.enabled ? config.mode : "DISABLED", claimed: 0, externalCalls: 0 };
+  if (!config.enabled || config.mode !== "PILOT") return { state: config.enabled ? config.mode : "DISABLED", claimed: 0, externalCalls: 0, scheduled: 0 };
   const apiUrl = process.env.MARIE_WAHA_API_URL;
   const apiKey = process.env.MARIE_WAHA_API_KEY;
   const provider = options.provider ?? (apiUrl && apiKey ? new WahaProvider(apiUrl, apiKey, "naz") : null);
-  if (!provider) return { state: "MISSING_PROVIDER_ENV", claimed: 0, externalCalls: 0 };
+  if (!provider) return { state: "MISSING_PROVIDER_ENV", claimed: 0, externalCalls: 0, scheduled: 0 };
+
+  // Phase 1: Schedule eligible PENDING orders using the read-only scheduler extraction.
+  // This runs before message sending so newly-scheduled orders can be contacted
+  // in the same tick if within the contact window.
+  let scheduled = 0;
+  const userIds = await db.order.findMany({
+    where: { status: "PENDING", isErthbox: false },
+    select: { userId: true },
+    distinct: ["userId"],
+  });
+  if (config.contactMode === "STOPPED") {
+    return { state: "CONTACT_MODE_STOPPED", claimed: 0, externalCalls: 0, scheduled: 0 };
+  }
+  for (const { userId } of userIds) {
+    try {
+      const proposal = await proposeSchedule(userId, now);
+      for (const item of proposal.proposed) {
+        // WHITELIST mode: only proceed for operator-approved orders.
+        if (config.contactMode === "WHITELIST" && !config.orderAllowlist?.includes(item.orderId)) continue;
+        const persistResult = await persistScheduleProposal({
+          internalId: item.internalId,
+          date: item.date,
+          points: item.points,
+        });
+        if (persistResult.persisted) {
+          scheduled++;
+          // Enqueue the initial contact message for this newly-scheduled order.
+          await createInitialContactForOrder(item.internalId, now, config);
+        }
+      }
+    } catch (error) {
+      console.error("[marie/worker] scheduling failed for user", userId, error instanceof Error ? error.message : "unknown");
+    }
+  }
+
+  // Phase 2: Send queued messages — capped per tick (anti-ban pacing).
   let claimed = 0;
   let externalCalls = 0;
-  for (; claimed < config.maxMessagesPerRun; claimed++) {
+  const perTick = "maxMessagesPerTick" in config ? Math.min(config.maxMessagesPerRun, (config.maxMessagesPerTick as number ?? 3)) : Math.min(config.maxMessagesPerRun, 3);
+
+  let claimedThisTick = 0;
+  for (; claimedThisTick < perTick; claimedThisTick++) {
     const job = await claimJob(now);
     if (!job) break;
     const result = await executeClaimedJob(job.id, job.leaseToken, provider, config, now);
+    claimed++;
     if (result.outcome === "SENT" || ("externalCall" in result && result.externalCall)) externalCalls++;
   }
-  return { state: "COMPLETE", claimed, externalCalls };
+  return { state: "COMPLETE", claimed, externalCalls, scheduled };
+}
+
+/**
+ * Creates a conversation and enqueues the initial contact message for a
+ * newly-scheduled order. Idempotent: safe to call multiple times.
+ */
+async function createInitialContactForOrder(orderId: string, now: Date, config: WorkerConfig) {
+  const order = await db.order.findUnique({
+    where: { id: orderId },
+    select: { id: true, orderId: true, customerName: true, phone: true, scheduledDate: true, userId: true, address: true, city: true },
+  });
+  if (!order || !order.scheduledDate || !order.phone) return;
+
+  const normalizedPhone = normalizeMalaysianPhone(order.phone);
+  if (!normalizedPhone) return;
+
+  const chatId = `${normalizedPhone.replace(/^\+/, "")}@c.us`;
+  const conversation = await db.customerConversation.upsert({
+    where: { orderId_chatId: { orderId: order.id, chatId } },
+    create: { orderId: order.id, chatId, normalizedPhone, state: "ACTIVE" },
+    update: {},
+  });
+
+  const { renderInitialContactDraft } = await import("./marie-operations");
+  const fullAddress = [order.address, order.city].filter(Boolean).join(", ");
+  const body = renderInitialContactDraft({
+    customerName: order.customerName,
+    orderRef: order.orderId,
+    proposedDate: order.scheduledDate,
+    address: fullAddress,
+  });
+
+  const runAfter = isWithinMytContactWindow(now, config.contactStartHour, config.contactEndHour)
+    ? now
+    : nextMytContactStart(now, config.contactStartHour, config.contactEndHour);
+
+  await enqueueOutbound({
+    orderId: order.id,
+    conversationId: conversation.id,
+    body,
+    idempotencyKey: `initial-contact:${order.id}`,
+    runAfter,
+  });
 }

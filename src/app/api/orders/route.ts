@@ -21,6 +21,7 @@ export async function GET(request: NextRequest) {
     const date = searchParams.get("date");
     const userId = searchParams.get("userId"); // For Support/Admin to query specific hero's orders
     const all = searchParams.get("all"); // For Admin to see all orders
+    const search = searchParams.get("search")?.trim(); // Order reference lookup (whitelist manager, order card search)
 
     // Support and Admin can see all heroes' orders
     const isSupport = user.role === "SUPPORT" || user.role === "ADMIN";
@@ -45,6 +46,12 @@ export async function GET(request: NextRequest) {
     }
     if (zone) where.zone = parseInt(zone);
     if (date) where.scheduledDate = date;
+    if (search) {
+      where.OR = [
+        { orderId: { contains: search } },
+        { customerName: { contains: search } },
+      ];
+    }
 
     const page = Math.max(1, parseInt(searchParams.get("page") || "1"));
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "50")));

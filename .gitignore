@@ -65,3 +65,6 @@ upload/extracted
 keystore.properties
 /db/
 /custom.db
+
+# Marie DuitNow QR images (customer payment data, never web-served or committed)
+/private/
