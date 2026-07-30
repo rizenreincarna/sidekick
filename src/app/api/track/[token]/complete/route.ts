@@ -36,7 +36,12 @@ export async function POST(
     const order = await db.order.findFirst({ where: { orderId: link.orderId, userId: user.id }, select: { status: true } });
     if (!order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
     try {
-      canonicalDriverCompletion(order.status);
+      const next = canonicalDriverCompletion(order.status);
+      // Idempotent: if already COMPLETED, skip the mutation and return success.
+      if (order.status === "COMPLETED") {
+        return NextResponse.json({ ok: true, completedAt: completedAt.toISOString() });
+      }
+      next; // referenced — prevents unused-var lint
     } catch (cause) {
       return NextResponse.json({ error: cause instanceof Error ? cause.message : "Invalid completion state" }, { status: 409 });
     }

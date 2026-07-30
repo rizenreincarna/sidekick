@@ -77,10 +77,11 @@ export function canonicalNormalTransition(from: unknown, to: unknown): OrderStat
   return next;
 }
 
-/** Driver tracking is the only operational path allowed to complete before BOOKED. */
+/** Driver tracking is the only operational path allowed to complete before BOOKED.
+ *  If the order is already COMPLETED, treat as idempotent success (no-op). */
 export function canonicalDriverCompletion(from: unknown): "COMPLETED" {
   const current = normalizeOrderStatus(from);
-  if (!current || !["SCHEDULED", "CONTACTED", "BOOKED"].includes(current)) {
+  if (!current || !["SCHEDULED", "CONTACTED", "BOOKED", "COMPLETED"].includes(current)) {
     throw new Error(`Invalid driver completion from ${String(from)}`);
   }
   return "COMPLETED";

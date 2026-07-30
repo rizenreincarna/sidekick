@@ -10,5 +10,17 @@
     "amount": 269,
     "note": "26175 - Shah Alam",
     "seq": 2
+  },
+  {
+    "type": "payment",
+    "amount": 381,
+    "note": "26095 - Kuala Lumpur (XL)",
+    "seq": 3
+  },
+  {
+    "type": "payment",
+    "amount": 34,
+    "note": "26151 - Kuala Lumpur",
+    "seq": 4
   }
 ]

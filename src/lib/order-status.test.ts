@@ -57,6 +57,7 @@ describe("order statuses", () => {
     expect(canonicalDriverCompletion("SCHEDULED")).toBe("COMPLETED");
     expect(canonicalDriverCompletion("CONTACTED")).toBe("COMPLETED");
     expect(canonicalDriverCompletion("BOOKED")).toBe("COMPLETED");
+    expect(canonicalDriverCompletion("COMPLETED")).toBe("COMPLETED"); // idempotent
     expect(() => canonicalDriverCompletion("PENDING")).toThrow("Invalid driver completion");
     expect(canonicalDriverCompletionUndo("COMPLETED")).toBe("BOOKED");
     expect(() => canonicalDriverCompletionUndo("BOOKED")).toThrow("Invalid driver completion undo");

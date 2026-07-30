@@ -1,0 +1,26 @@
+[
+  {
+    "type": "payment",
+    "amount": 34,
+    "note": "26151 - Kuala Lumpur",
+    "seq": 1
+  },
+  {
+    "type": "payment",
+    "amount": 45,
+    "note": "26055 - Petaling Jaya",
+    "seq": 2
+  },
+  {
+    "type": "payment",
+    "amount": 30,
+    "note": "26128 - Kuala Lumpur",
+    "seq": 3
+  },
+  {
+    "type": "payment",
+    "amount": 30,
+    "note": "26123 - Kuala Lumpur",
+    "seq": 4
+  }
+]
