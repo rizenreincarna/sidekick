@@ -1,0 +1,32 @@
+[
+  {
+    "type": "payment",
+    "amount": 272,
+    "note": "26105 - Kuala Lumpur",
+    "seq": 1
+  },
+  {
+    "type": "payment",
+    "amount": 40,
+    "note": "26125 - Kuala Lumpur",
+    "seq": 2
+  },
+  {
+    "type": "payment",
+    "amount": 17,
+    "note": "26188 Kuala Lumpur",
+    "seq": 3
+  },
+  {
+    "type": "payment",
+    "amount": 33,
+    "note": "26160 KL Eco City",
+    "seq": 4
+  },
+  {
+    "type": "received",
+    "amount": 35,
+    "note": "26149 - Petaling Jaya (pickup fee)",
+    "seq": 5
+  }
+]
