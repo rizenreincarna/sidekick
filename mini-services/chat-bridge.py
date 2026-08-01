@@ -22,12 +22,24 @@ _VENV_PY = "/usr/local/lib/hermes-agent/venv/bin/python"
 DB_PATH = "/root/.local/share/engraphis/engraphis.db"
 
 PORT = int(os.environ.get("CHAT_PORT", "8103"))
-API_KEY = os.environ.get("OPENCODE_GO_API_KEY", "")
-BASE_URL = "https://opencode.ai/zen/go/v1"
+API_KEY = os.environ.get("NEURALWATT_API_KEY", "")
+BASE_URL = os.environ.get("RIZEN_CHAT_BASE_URL", "https://api.neuralwatt.com/v1")
 
-# OmniVoice TTS
-OMNI_URL = "http://100.68.146.27:8880/v1/audio/speech"
-OMNI_TOKEN = "7a18fc33c1f16c242ce714a0b7a287ddc846d9f899b68a18"
+# Laptop voice API over Tailscale. The token is injected from the PM2 environment.
+OMNI_URL = os.environ.get("RIZEN_VOICE_URL", "http://100.87.225.118:8880/v1/audio/speech")
+OMNI_TOKEN = os.environ.get("RIZEN_VOICE_TOKEN", "")
+
+
+def _voice_token():
+    """Read the VPS-managed token so PM2 restarts cannot retain stale credentials."""
+    try:
+        with open("/etc/rizen-worker/voice.env") as voice_env:
+            for line in voice_env:
+                if line.startswith("RIZEN_VOICE_TOKEN="):
+                    return line.split("=", 1)[1].strip()
+    except OSError:
+        return OMNI_TOKEN
+    return OMNI_TOKEN
 
 # Engraphis memory engine — single instance serves all 3 workspaces
 # (will / marie / shared). REST reads are free-tier; the bridge only reads.
@@ -39,13 +51,25 @@ ENGRAPHIS_URL = "http://127.0.0.1:8700"
 
 AGENTS = {
     "marie": {
-        "model": "minimax-m2.5",
-        "system": "You are Marie, a friendly personal AI assistant. Keep responses to 1-2 short sentences.",
+        "model": "deepseek-v4-flash",
+        "system": (
+            "You are Marie, a friendly personal AI assistant. Respond in AT MOST two short "
+            "sentences, conversational and brief. Do NOT call tools or report server/status "
+            "details unless the user explicitly asks about the server, services, disk, or "
+            "system. If the user says goodbye, thanks, or the task is complete, end your "
+            "reply with the exact marker <END_CONVERSATION>."
+        ),
         "voice": "marie",
     },
     "will": {
-        "model": "minimax-m2.5",
-        "system": "You are Will, CEO and infrastructure architect. Keep responses to 1-2 short sentences.",
+        "model": "deepseek-v4-flash",
+        "system": (
+            "You are Will, CEO and infrastructure architect. Respond in AT MOST two short "
+            "sentences, conversational and brief. Do NOT call tools or report server/status "
+            "details unless the user explicitly asks about the server, services, disk, or "
+            "system. If the user says goodbye, thanks, or the task is complete, end your "
+            "reply with the exact marker <END_CONVERSATION>."
+        ),
         "voice": "will",
     },
 }
@@ -205,13 +229,27 @@ def _remember_exchange(agent, user_msg, reply):
         print(f"[memory-write] {agent}: {e}", flush=True)
 
 
+_STATUS_KEYWORDS = (
+    "server", "status", "disk", "uptime", "memory", "service", "stats",
+    "ssh", "cpu", "load", "process", "host", "vps", "health",
+)
+
+
+def _wants_status(message: str) -> bool:
+    lowered = message.lower()
+    return any(keyword in lowered for keyword in _STATUS_KEYWORDS)
+
+
 def chat(agent, message):
     cfg = AGENTS.get(agent, AGENTS["marie"])
     model = cfg["model"]
     voice = cfg["voice"]
 
-    # Fetch relevant memories
-    mem_context = _fetch_memory(agent, message)
+    # Fetch relevant memories (only for substantive questions — greetings
+    # otherwise get answered with stale system-status summaries).
+    mem_context = ""
+    if _wants_status(message) or len(message.split()) >= 10:
+        mem_context = _fetch_memory(agent, message)
     system = cfg["system"]
 
     # Build messages with history
@@ -229,15 +267,19 @@ def chat(agent, message):
     msgs.append({"role": "user", "content": query})
     HISTORY[agent].append({"role": "user", "content": message})  # store original without context
 
-    # LLM call with tool support
+    # Tools are only offered for explicit status questions — otherwise the
+    # model dumps verbose system summaries on every greeting, which makes
+    # TTS slow and the conversation awkward. Gate on the raw user message:
+    # injected memory context contains status words and would leak through.
+    offer_tools = _wants_status(message)
     body = json.dumps({
         "model": model,
         "messages": msgs,
-        "max_tokens": 500,
+        "max_tokens": 120,
         "stream": False,
         "temperature": 0.7,
-        "tools": TOOLS,
-        "tool_choice": "auto",
+        "tools": TOOLS if offer_tools else None,
+        "tool_choice": "auto" if offer_tools else None,
     }).encode()
 
     req = urllib.request.Request(
@@ -271,7 +313,7 @@ def chat(agent, message):
             body2 = json.dumps({
                 "model": model,
                 "messages": msgs2,
-                "max_tokens": 500,
+                "max_tokens": 120,
                 "stream": False,
                 "temperature": 0.7,
                 "tools": TOOLS,
@@ -290,12 +332,15 @@ def chat(agent, message):
         reply = (msg.get("content") or "").strip()
         if not reply:
             reply = "Done. What else do you need?"
+        end_conversation = reply.endswith("<END_CONVERSATION>")
+        if end_conversation:
+            reply = reply[: -len("<END_CONVERSATION>")].rstrip()
         HISTORY[agent].append({"role": "assistant", "content": reply})
         # Persist this exchange into Engraphis so the agent learns over time.
         _remember_exchange(agent, message, reply)
-        return reply, voice
+        return reply, voice, end_conversation
     except Exception as e:
-        return f"Error: {str(e)[:100]}", voice
+        return f"Error: {str(e)[:100]}", voice, False
 
 
 def synth(text, voice="marie"):
@@ -303,11 +348,11 @@ def synth(text, voice="marie"):
     req = urllib.request.Request(
         OMNI_URL,
         data=body,
-        headers={"Authorization": f"Bearer {OMNI_TOKEN}", "Content-Type": "application/json"},
+        headers={"Authorization": f"Bearer {_voice_token()}", "Content-Type": "application/json"},
         method="POST"
     )
     try:
-        with urllib.request.urlopen(req, timeout=30) as r:
+        with urllib.request.urlopen(req, timeout=120) as r:
             wav = r.read()
             return base64.b64encode(wav).decode("ascii")
     except Exception as e:
@@ -341,9 +386,9 @@ class H(BaseHTTPRequestHandler):
             if not msg:
                 self._json(400, {"error": "message required"}); return
 
-            reply, voice = chat(agent, msg)
+            reply, voice, end_conversation = chat(agent, msg)
             audio = synth(reply, voice)
-            self._json(200, {"reply": reply, "agent": agent, "audio": audio})
+            self._json(200, {"reply": reply, "agent": agent, "audio": audio, "end_conversation": end_conversation})
 
         else:
             self._json(404, {"error": "not found"})

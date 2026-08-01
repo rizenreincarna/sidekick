@@ -133,6 +133,25 @@ def cmd_total():
         print(f"  + variable: {', '.join(unknown)}")
     print(f"  Grand total (est.): RM{total + 200:.2f}+")
 
+def cmd_set_amount(bill_id, amount):
+    """Update a tracked bill's amount (e.g. from an OCR'd receipt)."""
+    data = load()
+    bill = next((b for b in data["bills"] if b["id"] == bill_id), None)
+    if not bill:
+        print(f"❌ Bill '{bill_id}' not found. Options: {', '.join(b['id'] for b in data['bills'])}")
+        return
+    try:
+        amount = float(amount)
+    except (TypeError, ValueError):
+        print(f"❌ Invalid amount: {amount!r}")
+        return
+    if amount < 0:
+        print("❌ Amount cannot be negative.")
+        return
+    bill["amount"] = amount
+    save(data)
+    print(f"✅ Updated {bill['name']} to RM{amount:.2f}")
+
 def cmd_remind():
     """Check if today is 15th or 25th and generate reminder."""
     today = date.today()
@@ -189,6 +208,11 @@ if __name__ == "__main__":
             print("Usage: bills.py pay <bill_id>")
             sys.exit(1)
         cmd_pay(sys.argv[2])
+    elif action == "set_amount":
+        if len(sys.argv) < 4:
+            print("Usage: bills.py set_amount <bill_id> <amount>")
+            sys.exit(1)
+        cmd_set_amount(sys.argv[2], sys.argv[3])
     elif action == "unpaid":
         cmd_unpaid()
     elif action == "total":

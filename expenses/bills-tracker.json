@@ -90,9 +90,29 @@
     }
   ],
   "payment_history": [
-    {"date": "2026-07-09", "bill": "House Rent", "amount": 1300, "note": "Paid to Mr Sazali"},
-    {"date": "2026-07-09", "bill": "Internet (BSP)", "amount": 110, "note": "YES internet bill — same as BSP"},
-    {"date": "2026-07-09", "bill": "Wife Nafkah", "amount": 250, "note": "RM250 of RM1,000"},
-    {"date": "2026-07-09", "bill": "Shopee Loan", "amount": 121, "note": "Paid via Mayah"}
+    {
+      "date": "2026-07-09",
+      "bill": "House Rent",
+      "amount": 1300,
+      "note": "Paid to Mr Sazali"
+    },
+    {
+      "date": "2026-07-09",
+      "bill": "Internet (BSP)",
+      "amount": 110,
+      "note": "YES internet bill — same as BSP"
+    },
+    {
+      "date": "2026-07-09",
+      "bill": "Wife Nafkah",
+      "amount": 250,
+      "note": "RM250 of RM1,000"
+    },
+    {
+      "date": "2026-07-09",
+      "bill": "Shopee Loan",
+      "amount": 121,
+      "note": "Paid via Mayah"
+    }
   ]
 }
