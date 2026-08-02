@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAuth } from "@/lib/session";
-import { canTransitionOrderStatus, normalizeOrderStatus } from "@/lib/order-status";
+import { canOperatorTransitionOrderStatus, normalizeOrderStatus } from "@/lib/order-status";
 
 // PATCH /api/orders/batch/status - Bulk update order statuses
 export async function PATCH(request: NextRequest) {
@@ -41,7 +41,7 @@ export async function PATCH(request: NextRequest) {
     const skipped: string[] = [];
 
     for (const order of orders) {
-      if (!canTransitionOrderStatus(order.status, canonicalStatus)) {
+      if (!canOperatorTransitionOrderStatus(order.status, canonicalStatus)) {
         skipped.push(order.id);
         continue;
       }

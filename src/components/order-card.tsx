@@ -156,10 +156,10 @@ export function OrderCard({ order, compact, onRefresh, holidays, offDays, isAdmi
   const nextStatus: Record<string, string | null> = { PENDING: "SCHEDULED", SCHEDULED: "CONTACTED", CONTACTED: "BOOKED", BOOKED: "COMPLETED" };
   const ns = nextStatus[displayStatus];
   const VALID_TRANSITIONS_UI: Record<string, string[]> = {
-    PENDING: ["SCHEDULED", "CANCELED"],
-    SCHEDULED: ["CONTACTED", "CANCELED"],
-    CONTACTED: ["BOOKED", "CANCELED"],
-    BOOKED: ["COMPLETED", "CANCELED"],
+    PENDING: ["SCHEDULED", "CONTACTED", "BOOKED", "CANCELED"],
+    SCHEDULED: ["PENDING", "CONTACTED", "BOOKED", "CANCELED"],
+    CONTACTED: ["PENDING", "SCHEDULED", "BOOKED", "CANCELED"],
+    BOOKED: ["PENDING", "SCHEDULED", "CONTACTED", "COMPLETED", "CANCELED"],
     COMPLETED: [],
     CANCELED: [],
   };

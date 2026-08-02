@@ -163,7 +163,7 @@ def _engraphis_recall(query, workspace):
     url = f"{ENGRAPHIS_URL}/api/recall?q={q}&workspace={ws}&k=5"
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "RizenCC/2.0"})
-        with urllib.request.urlopen(req, timeout=4) as r:
+        with urllib.request.urlopen(req, timeout=8) as r:
             data = json.loads(r.read())
         return data.get("memories", []) or []
     except Exception as e:
@@ -221,7 +221,7 @@ def _remember_exchange(agent, user_msg, reply):
     try:
         proc = subprocess.run(
             [_VENV_PY, "-c", script, title, content, agent, DB_PATH],
-            capture_output=True, text=True, timeout=8
+            capture_output=True, text=True, timeout=12
         )
         if proc.returncode != 0:
             print(f"[memory-write] {agent}: {proc.stderr.strip()}", flush=True)
@@ -238,6 +238,20 @@ _STATUS_KEYWORDS = (
 def _wants_status(message: str) -> bool:
     lowered = message.lower()
     return any(keyword in lowered for keyword in _STATUS_KEYWORDS)
+
+
+_GOODBYE_MARKERS = (
+    "bye", "goodbye", "good night", "goodnight", "see you", "see ya",
+    "that's all", "that is all", "all for today", "done for today",
+    "thank you", "thanks", "terima kasih", "jumpa lagi", "selamat malam",
+    "selamat tinggal", "no more", "nothing else", "that's it", "that is it",
+    "talk later", "talk to you later",
+)
+
+
+def _is_goodbye(message: str) -> bool:
+    lowered = message.lower().strip()
+    return any(marker in lowered for marker in _GOODBYE_MARKERS)
 
 
 def chat(agent, message):
@@ -332,8 +346,10 @@ def chat(agent, message):
         reply = (msg.get("content") or "").strip()
         if not reply:
             reply = "Done. What else do you need?"
-        end_conversation = reply.endswith("<END_CONVERSATION>")
-        if end_conversation:
+        # Deterministic goodbye detection (keyword) OR the model's marker.
+        # The marker alone is unreliable — models skip it on shorter replies.
+        end_conversation = _is_goodbye(message) or reply.endswith("<END_CONVERSATION>")
+        if reply.endswith("<END_CONVERSATION>"):
             reply = reply[: -len("<END_CONVERSATION>")].rstrip()
         HISTORY[agent].append({"role": "assistant", "content": reply})
         # Persist this exchange into Engraphis so the agent learns over time.

@@ -4,7 +4,7 @@ import { logAudit } from "@/lib/audit";
 import { requireAuth } from "@/lib/session";
 import { quickGeocode } from "@/lib/geocode";
 import { NextRequest, NextResponse } from "next/server";
-import { canonicalNormalTransition } from "@/lib/order-status";
+import { canonicalOperatorTransition } from "@/lib/order-status";
 
 // PATCH /api/orders/[id] - Update an order (owner, Support, or Admin)
 export async function PATCH(
@@ -92,7 +92,7 @@ export async function PATCH(
     if (status !== undefined) {
       let canonicalStatus: string;
       try {
-        canonicalStatus = canonicalNormalTransition(existingOrder.status, status);
+        canonicalStatus = canonicalOperatorTransition(existingOrder.status, status);
       } catch {
         return NextResponse.json(
           { error: `Invalid status transition from ${existingOrder.status} to ${status}` },

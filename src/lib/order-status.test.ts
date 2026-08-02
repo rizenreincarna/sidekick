@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   assertMarieMayMutate,
+  canOperatorTransitionOrderStatus,
   canTransitionOrderStatus,
   canonicalDriverCompletion,
   canonicalDriverCompletionUndo,
   canonicalNormalTransition,
+  canonicalOperatorTransition,
   isOperatorOwnedOrder,
   normalizeOrderStatus,
   ORDER_STATUS_LABELS,
@@ -61,5 +63,27 @@ describe("order statuses", () => {
     expect(() => canonicalDriverCompletion("PENDING")).toThrow("Invalid driver completion");
     expect(canonicalDriverCompletionUndo("COMPLETED")).toBe("BOOKED");
     expect(() => canonicalDriverCompletionUndo("BOOKED")).toThrow("Invalid driver completion undo");
+  });
+
+  it("allows corrective backward operator transitions (human only)", () => {
+    expect(canOperatorTransitionOrderStatus("BOOKED", "CONTACTED")).toBe(true);
+    expect(canOperatorTransitionOrderStatus("BOOKED", "SCHEDULED")).toBe(true);
+    expect(canOperatorTransitionOrderStatus("CONTACTED", "SCHEDULED")).toBe(true);
+    expect(canOperatorTransitionOrderStatus("SCHEDULED", "PENDING")).toBe(true);
+    // Operator can still move forward
+    expect(canOperatorTransitionOrderStatus("BOOKED", "COMPLETED")).toBe(true);
+    expect(canOperatorTransitionOrderStatus("PENDING", "BOOKED")).toBe(true);
+    // Terminal states stay terminal for everyone
+    expect(canOperatorTransitionOrderStatus("COMPLETED", "CONTACTED")).toBe(false);
+    expect(canOperatorTransitionOrderStatus("CANCELED", "BOOKED")).toBe(false);
+    // Automation (strict) is NOT given these backward moves
+    expect(canTransitionOrderStatus("BOOKED", "CONTACTED")).toBe(false);
+  });
+
+  it("canonicalOperatorTransition resolves backward writes", () => {
+    expect(canonicalOperatorTransition("BOOKED", "CONTACTED")).toBe("CONTACTED");
+    expect(canonicalOperatorTransition("BOOKED", "SCHEDULED")).toBe("SCHEDULED");
+    expect(canonicalOperatorTransition("PENDING", "BOOKED")).toBe("BOOKED");
+    expect(() => canonicalOperatorTransition("COMPLETED", "SCHEDULED")).toThrow("Invalid operator transition");
   });
 });
