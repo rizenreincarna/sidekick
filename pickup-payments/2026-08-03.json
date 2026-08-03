@@ -1,0 +1,26 @@
+[
+  {
+    "type": "payment",
+    "amount": 25,
+    "note": "26176 Shah Alam",
+    "seq": 1
+  },
+  {
+    "type": "payment",
+    "amount": 150,
+    "note": "26111 Shah Alam",
+    "seq": 2
+  },
+  {
+    "type": "received",
+    "amount": 35,
+    "note": "26147 Kuala Lumpur (pickup fee)",
+    "seq": 3
+  },
+  {
+    "type": "payment",
+    "amount": 130,
+    "note": "26142 Petaling Jaya",
+    "seq": 4
+  }
+]
