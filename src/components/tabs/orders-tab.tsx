@@ -123,6 +123,23 @@ export function OrdersTab({ orders, onRefresh, holidays, offDays, userZones, onV
 
   const displayOrders = (showAllOrders && isSupportOrAdmin) ? allOrders : (filterStatus !== "ALL" && statusFilteredOrders ? statusFilteredOrders : orders);
 
+  // Optimistically update local filtered/all lists when an order's status changes,
+  // so the UI reflects the filter immediately without waiting for a refetch.
+  const handleOrderStatusChange = useCallback((orderId: string, newStatus: string) => {
+    // Update status-filtered list if we're viewing one
+    setStatusFilteredOrders(prev => {
+      if (!prev) return prev;
+      const updated = prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o);
+      // If the new status no longer matches the active filter, remove it from view
+      return filterStatus !== "ALL" ? updated.filter(o => o.status === filterStatus) : updated;
+    });
+    // Update all-orders list if we're viewing it
+    setAllOrders(prev => {
+      if (!prev.length) return prev;
+      return prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o);
+    });
+  }, [filterStatus]);
+
   // Universal search: matches any text-based order field
   const searchLower = searchQuery.toLowerCase().trim();
   const filtered = displayOrders.filter(o => {
@@ -487,7 +504,7 @@ export function OrdersTab({ orders, onRefresh, holidays, offDays, userZones, onV
         </div>
       )}
       <div className="flex-1 min-h-0 overflow-y-auto stagger-fade">
-        {sorted.map(o => <OrderCard key={o.id} order={o} onRefresh={onRefresh} holidays={holidays} offDays={offDays} isAdminView={showAllOrders && isSupportOrAdmin} heroes={showAllOrders && isSupportOrAdmin ? heroes : undefined} onReassign={showAllOrders && isSupportOrAdmin ? handleReassign : undefined} userZones={userZones} disabledZones={disabledZones} selected={selectMode ? selectedIds.has(o.id) : undefined} onToggleSelect={selectMode ? () => toggleSelectOrder(o.id) : undefined} onShowTimeline={() => setTimelineOrder(o)} />)}
+        {sorted.map(o => <OrderCard key={o.id} order={o} onRefresh={onRefresh} onStatusChange={handleOrderStatusChange} holidays={holidays} offDays={offDays} isAdminView={showAllOrders && isSupportOrAdmin} heroes={showAllOrders && isSupportOrAdmin ? heroes : undefined} onReassign={showAllOrders && isSupportOrAdmin ? handleReassign : undefined} userZones={userZones} disabledZones={disabledZones} selected={selectMode ? selectedIds.has(o.id) : undefined} onToggleSelect={selectMode ? () => toggleSelectOrder(o.id) : undefined} onShowTimeline={() => setTimelineOrder(o)} />)}
         {filtered.length === 0 && (
           <div className="text-center py-16 px-6">
             <svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg" className="mx-auto mb-5 opacity-70">

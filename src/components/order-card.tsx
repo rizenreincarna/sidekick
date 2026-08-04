@@ -23,7 +23,7 @@ import { formatEventType, ZoneBadge, StatusBadge } from "@/components/ui/shared-
 import { MiniCalendar } from "@/components/mini-calendar";
 
 // ============ ORDER CARD ============
-export function OrderCard({ order, compact, onRefresh, holidays, offDays, isAdminView, heroes, onReassign, userZones, disabledZones, selected, onToggleSelect, onShowTimeline }: { order: Order; compact?: boolean; onRefresh: () => void; holidays?: Holiday[]; offDays?: OffDay[]; isAdminView?: boolean; heroes?: HeroOption[]; onReassign?: (orderId: string, targetHeroId: string) => Promise<void>; userZones?: UserZoneData[]; disabledZones?: number[]; selected?: boolean; onToggleSelect?: () => void; onShowTimeline?: () => void }) {
+export function OrderCard({ order, compact, onRefresh, onStatusChange, holidays, offDays, isAdminView, heroes, onReassign, userZones, disabledZones, selected, onToggleSelect, onShowTimeline }: { order: Order; compact?: boolean; onRefresh: () => void; onStatusChange?: (orderId: string, newStatus: string) => void; holidays?: Holiday[]; offDays?: OffDay[]; isAdminView?: boolean; heroes?: HeroOption[]; onReassign?: (orderId: string, targetHeroId: string) => Promise<void>; userZones?: UserZoneData[]; disabledZones?: number[]; selected?: boolean; onToggleSelect?: () => void; onShowTimeline?: () => void }) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [verifying, setVerifying] = useState(false);
@@ -67,6 +67,7 @@ export function OrderCard({ order, compact, onRefresh, holidays, offDays, isAdmi
         return;
       }
       toast({ title: `${order.orderId} → ${newStatus}` });
+      onStatusChange?.(order.id, newStatus); // update parent filtered/all lists immediately
       onRefresh();
     } catch { setOptimisticStatus(null); toast({ title: "Network error", description: "Could not reach server. Check your connection.", variant: "destructive" }); }
     finally { setLoading(false); }
