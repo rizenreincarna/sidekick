@@ -1,32 +1,7 @@
 [
-  {
-    "type": "payment",
-    "amount": 39,
-    "note": "26219 Shah Alam",
-    "seq": 1
-  },
-  {
-    "type": "payment",
-    "amount": 115,
-    "note": "26137 Klang",
-    "seq": 2
-  },
-  {
-    "type": "payment",
-    "amount": 54,
-    "note": "26205 Petaling Jaya",
-    "seq": 3
-  },
-  {
-    "type": "payment",
-    "amount": 15,
-    "note": "26185 Petaling Jaya",
-    "seq": 4
-  },
-  {
-    "type": "payment",
-    "amount": 11,
-    "note": "26220 Petaling Jaya",
-    "seq": 5
-  }
+  {"type": "payment", "amount": 39, "note": "26219 Shah Alam", "seq": 1},
+  {"type": "payment", "amount": 115, "note": "26137 Klang", "seq": 2},
+  {"type": "payment", "amount": 54, "note": "26205 Petaling Jaya", "seq": 3},
+  {"type": "payment", "amount": 15, "note": "26185 Petaling Jaya", "seq": 4},
+  {"type": "payment", "amount": 11, "note": "26220 Petaling Jaya", "seq": 5}
 ]

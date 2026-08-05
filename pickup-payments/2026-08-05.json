@@ -1,0 +1,32 @@
+[
+  {
+    "type": "payment",
+    "amount": 47,
+    "note": "26190 Ampang",
+    "seq": 1
+  },
+  {
+    "type": "payment",
+    "amount": 5,
+    "note": "26154 Selangor",
+    "seq": 2
+  },
+  {
+    "type": "payment",
+    "amount": 22,
+    "note": "26180 KAJANG",
+    "seq": 3
+  },
+  {
+    "type": "payment",
+    "amount": 30,
+    "note": "26181 Kajang",
+    "seq": 4
+  },
+  {
+    "type": "payment",
+    "amount": 42,
+    "note": "26222 Sepang",
+    "seq": 5
+  }
+]
