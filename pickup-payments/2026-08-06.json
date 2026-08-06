@@ -1,0 +1,26 @@
+[
+  {
+    "type": "payment",
+    "amount": 20,
+    "note": "26246 Petaling Jaya",
+    "seq": 1
+  },
+  {
+    "type": "payment",
+    "amount": 91,
+    "note": "26203 Batu Caves",
+    "seq": 2
+  },
+  {
+    "type": "payment",
+    "amount": 39,
+    "note": "26191 Puchong",
+    "seq": 3
+  },
+  {
+    "type": "payment",
+    "amount": 134,
+    "note": "26208 Puchong",
+    "seq": 4
+  }
+]

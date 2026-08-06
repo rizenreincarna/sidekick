@@ -140,14 +140,38 @@ export function OrdersTab({ orders, onRefresh, holidays, offDays, userZones, onV
     });
   }, [filterStatus]);
 
-  // Universal search: matches any text-based order field
+  // Debounced server-side search: when the user types a query, fetch matching
+  // orders from the API (searching across ALL statuses) instead of filtering
+  // the limited client-side list (which is capped at 100/200 most recent).
+  const [searchResults, setSearchResults] = useState<Order[] | null>(null);
+  const [searching, setSearching] = useState(false);
+  useEffect(() => {
+    const query = searchQuery.trim();
+    if (!query) { setSearchResults(null); return; }
+    setSearching(true);
+    const timer = setTimeout(() => {
+      const params = new URLSearchParams({ search: query, limit: "200" });
+      if (showAllOrders && isSupportOrAdmin) params.set("all", "true");
+      fetch(`/api/orders?${params}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(d => { setSearchResults(d?.orders ?? []); setSearching(false); })
+        .catch(() => { setSearchResults([]); setSearching(false); });
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery, showAllOrders, isSupportOrAdmin]);
+
+  // Universal search: when a server search is active, use those results;
+  // otherwise filter the loaded client-side set as before.
   const searchLower = searchQuery.toLowerCase().trim();
-  const filtered = displayOrders.filter(o => {
-    if (filterStatus !== "ALL" && o.status !== filterStatus) return false;
-    if (filterZone !== "ALL" && o.zone !== parseInt(filterZone)) return false;
-    if (filterHero !== "ALL" && o.user?.id !== filterHero) return false;
-    if (filterDate && o.scheduledDate !== filterDate) return false;
-    if (searchLower) {
+  const activeOrders = searchResults ?? displayOrders;
+  const filtered = activeOrders.filter(o => {
+    if (!searchResults) {
+      if (filterStatus !== "ALL" && o.status !== filterStatus) return false;
+      if (filterZone !== "ALL" && o.zone !== parseInt(filterZone)) return false;
+      if (filterHero !== "ALL" && o.user?.id !== filterHero) return false;
+      if (filterDate && o.scheduledDate !== filterDate) return false;
+    }
+    if (searchLower && !searchResults) {
       const zoneName = userZones?.find(uz => uz.zoneId === o.zone)?.name || getZoneName(o.zone);
       const heroName = o.user?.displayName || o.user?.username || "";
       const haystack = [
