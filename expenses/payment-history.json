@@ -20,5 +20,11 @@
       "rent",
       "water"
     ]
+  },
+  "2026-08": {
+    "paid": [
+      "rent",
+      "shopee_loan"
+    ]
   }
 }
