@@ -107,3 +107,20 @@ describe("ALL status filter predicate", () => {
     expect(predicate("BOOKED", "PENDING")).toBe(false);
   });
 });
+
+// Regression for the live bug: Prisma 6.11's SQLite driver writes DateTime as
+// integer epoch-millis, while legacy rows were datetime text. The DB is now
+// normalized to integer and the API serializes every createdAt as ISO, but if a
+// raw epoch string ever reaches the client it must still sort by true recency
+// (not sink below ISO rows the way SQLite's storage-class ORDER BY did).
+describe("mixed timestamp representations (root-cause regression)", () => {
+  it("an epoch-millis string newer than ISO rows still sorts first", () => {
+    const newestEpoch = ev("x", "ERTHBOX-023", "1786363541768"); // 2026-08-10T12:05:41Z
+    const isoOlder = ev("y", "26306", "2026-08-10T09:50:28.000Z");
+    const sorted = [isoOlder, newestEpoch].sort(compareOrders("created-desc"));
+    expect(sorted[0].orderId).toBe("ERTHBOX-023");
+  });
+  it("toTimestamp parses a bare epoch-millis string", () => {
+    expect(toTimestamp("1786363541768")).toBe(1786363541768);
+  });
+});

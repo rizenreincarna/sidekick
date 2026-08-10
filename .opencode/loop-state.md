@@ -23,3 +23,48 @@
   space-form date as LOCAL time; must force UTC. Found+fixed 2 wrong test oracles.
 - tsc exit 0. Full vitest 127/127 green.
 - Next: build, pm2 restart sidekick-app, live browser verify.
+
+## Round 2 result (root cause + fix)
+- Live probe surfaced REAL bug: ?all=true&limit=200 → 500. Two causes:
+  (a) 2 orphan orders (userId='user_default') → include:user returns null → Prisma
+      "Field user is required" throw. My id-desc sort pushed them past limit-100 →
+      surfaced at limit 200 (the ALL-view fetch). Fixed: null-safe include + fallback.
+  (b) THE pending-invisible cause: 11 PENDING orders stored createdAt as INTEGER
+      epoch-millis (not SQLite datetime text like all 287 others). SQLite ORDER BY
+      createdAt DESC sorts integer > text → dumped to bottom (page 2, invisible in
+      ALL view). Also Date.parse("1786355428839")=NaN → client sinked them too.
+      Fixed: normalized 18 Order + 35 AuditLog integer-epoch timestamps to
+      'YYYY-MM-DD HH:MM:SS' text. DB backed up to db/custom.db.bak-20260810-182349.
+
+## Final live verification (admin session, https://sidekick.rizen.space)
+- createdAt strictly desc across all 298 orders: PASS
+- Top of Latest-created-first = 26306 PENDING (true newest): PASS
+- ALL view contains all 11 PENDING (missing=0): PASS
+- PENDING appear at top (maxIdx=10): PASS
+- repeat-call identical order (deterministic): PASS
+- no NaN createdAt: PASS
+- Browser render: "Show All Users' Orders" → 200 orders, top = 26306..26302 PENDING
+  with Pending badges; sort selector = "Latest created first". Screenshot captured.
+
+## Status: DONE — loop converged, no further rounds.
+
+## Loop 2 — ERTHBOX-023 not at top of Latest-created-first
+ROOT CAUSE (deeper than Loop 1): Prisma 6.11 SQLite driver writes DateTime as
+INTEGER epoch-millis (proven by live create probe). Legacy rows were datetime
+TEXT. SQLite ORDER BY sorts by storage class (INTEGER > TEXT), so newly-created
+orders sorted to the BOTTOM — under every text row. My Loop-1 normalize-to-text
+was undone by the next Prisma create. Correct fix = normalize ALL 57 DateTime
+columns to INTEGER (matches the live writer; Prisma reads both back to ISO).
+FIX:
+- scripts/gen-normalize-sql.js generates scripts/normalize-datetimes-int.sql
+  (57 columns, idempotent). Applied to live db in a transaction. integrity ok.
+- Backup: db/custom.db.bak-preint-20260810-201256
+- Restarted sidekick-app (clear Prisma conn cache).
+LIVE VERIFY (admin):
+- createdAt strictly desc across all 301 orders; no NaN: PASS
+- ERTHBOX-023 rank 0: PASS
+- Fresh POST order -> rank 0 immediately: PASS (probe deleted)
+- status=PENDING/BOOKED isolate correctly; invalid status 400; date & search ok
+- UI: Latest-created-first top = ERTHBOX-023,022,021,26306... screenshot taken.
+- tsc clean; vitest 12/12 order-sort (added epoch regression), full 127/127.
+STATUS: DONE.
