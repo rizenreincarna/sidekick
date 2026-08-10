@@ -60,16 +60,49 @@ export async function GET(request: NextRequest) {
 
     const includeUser = isSupport || showAllOrders;
 
-    const [orders, total] = await Promise.all([
-      db.order.findMany({
-        where,
-        orderBy: { createdAt: "desc" },
-        skip: (page - 1) * limit,
-        take: limit,
-        include: includeUser ? { user: { select: { id: true, username: true, displayName: true, role: true } } } : undefined,
-      }),
-      db.order.count({ where }),
-    ]);
+    // Two legacy orders have userId "user_default" (a pre-migration placeholder
+    // with no matching User row; SQLite does not enforce the FK). A required
+    // `include: { user }` makes Prisma throw "Field user is required to return
+    // data, got null" the moment those rows fall inside the page — which is what
+    // previously emptied the ALL view at larger limits. Query null-safely and
+    // fall back to attaching the joined user manually when that happens.
+    let orders: any[];
+    let total: number;
+    try {
+      [orders, total] = await Promise.all([
+        db.order.findMany({
+          where,
+          // Deterministic base order: many orders share the same createdAt second
+          // (bulk imports). Secondary key on the cuid id keeps pagination stable and
+          // prevents arbitrary rowid ordering within a same-second batch.
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+          skip: (page - 1) * limit,
+          take: limit,
+          include: includeUser ? { user: { select: { id: true, username: true, displayName: true, role: true } } } : undefined,
+        }),
+        db.order.count({ where }),
+      ]);
+    } catch (err) {
+      if (!includeUser) throw err;
+      // Fallback: fetch without the join, then attach user (null for orphans).
+      const [rows, count] = await Promise.all([
+        db.order.findMany({
+          where,
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+          skip: (page - 1) * limit,
+          take: limit,
+        }),
+        db.order.count({ where }),
+      ]);
+      const userIds = [...new Set(rows.map((o: any) => o.userId).filter(Boolean))];
+      const users = await db.user.findMany({
+        where: { id: { in: userIds } },
+        select: { id: true, username: true, displayName: true, role: true },
+      });
+      const byId = new Map(users.map((u: any) => [u.id, u]));
+      orders = rows.map((o: any) => ({ ...o, user: byId.get(o.userId) ?? null }));
+      total = count;
+    }
 
     return NextResponse.json({ orders, total, page, totalPages: Math.ceil(total / limit) });
   } catch (error) {

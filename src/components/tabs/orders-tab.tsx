@@ -32,6 +32,7 @@ import { useFetchData } from "@/lib/use-fetch-data";
 import { formatEventType, ZoneBadge, StatusBadge } from "@/components/ui/shared-badges";
 import { MiniCalendar } from "@/components/mini-calendar";
 import { OrderCard } from "@/components/order-card";
+import { compareOrders, type SortOrder } from "@/lib/order-sort";
 
 export function OrdersTab({ orders, onRefresh, holidays, offDays, userZones, onVerifyStart, onGeocodeStart, initialStatusFilter, filterNonce }: { orders: Order[]; onRefresh: () => void; holidays?: Holiday[]; offDays?: OffDay[]; userZones?: UserZoneData[]; onVerifyStart?: (sessionId: string) => void; onGeocodeStart?: (sessionId: string) => void; initialStatusFilter?: string; filterNonce?: number }) {
   const { data: session } = useSession();
@@ -187,37 +188,10 @@ export function OrdersTab({ orders, onRefresh, holidays, offDays, userZones, onV
     return true;
   });
 
-  // Sort the filtered orders
-  const toTs = (v: string) => {
-    const n = typeof v === "string" ? Date.parse(v) : 0;
-    return isNaN(n) ? (typeof v === "string" ? parseInt(v, 10) || 0 : 0) : n;
-  };
-  const sorted = [...filtered].sort((a, b) => {
-    switch (sortOrder) {
-      case "created-desc":
-        return toTs(b.createdAt) - toTs(a.createdAt);
-      case "created-asc":
-        return toTs(a.createdAt) - toTs(b.createdAt);
-      case "id-asc": {
-        const aNum = parseInt(String(a.orderId).replace(/\D/g, ""), 10) || 0;
-        const bNum = parseInt(String(b.orderId).replace(/\D/g, ""), 10) || 0;
-        if (aNum !== bNum) return aNum - bNum;
-        return String(a.orderId).localeCompare(String(b.orderId));
-      }
-      case "id-desc": {
-        const aNum = parseInt(String(a.orderId).replace(/\D/g, ""), 10) || 0;
-        const bNum = parseInt(String(b.orderId).replace(/\D/g, ""), 10) || 0;
-        if (aNum !== bNum) return bNum - aNum;
-        return String(b.orderId).localeCompare(String(a.orderId));
-      }
-      case "updated-desc":
-        return toTs(b.updatedAt) - toTs(a.updatedAt);
-      case "updated-asc":
-        return toTs(a.updatedAt) - toTs(b.updatedAt);
-      default:
-        return 0;
-    }
-  });
+  // Sort the filtered orders with a deterministic comparator: strict key order
+  // plus a stable tie-break so same-second bulk-import batches (e.g. EVENT-*)
+  // don't fall back to Array.sort's arbitrary equal-key ordering.
+  const sorted = [...filtered].sort(compareOrders(sortOrder as SortOrder));
 
   // Reassign handler
   const handleReassign = async (orderId: string, targetHeroId: string) => {
