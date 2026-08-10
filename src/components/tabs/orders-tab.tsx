@@ -141,6 +141,20 @@ export function OrdersTab({ orders, onRefresh, holidays, offDays, userZones, onV
     });
   }, [filterStatus]);
 
+  // Optimistically update local lists when an order's scheduledDate changes, so the
+  // rescheduled date snaps into place immediately without waiting for the refetch.
+  // The date filter is applied client-side, so if a date filter is active and the new
+  // date no longer matches, drop the order from view.
+  const handleOrderDateChange = useCallback((orderId: string, newDate: string | null) => {
+    const apply = <T extends Order[] | null>(prev: T): T => {
+      if (!prev) return prev;
+      const updated = prev.map(o => o.id === orderId ? { ...o, scheduledDate: newDate } : o);
+      return (filterDate ? updated.filter(o => o.scheduledDate === filterDate) : updated) as T;
+    };
+    setStatusFilteredOrders(apply);
+    setAllOrders(prev => (prev.length ? apply(prev) : prev));
+  }, [filterDate]);
+
   // Debounced server-side search: when the user types a query, fetch matching
   // orders from the API (searching across ALL statuses) instead of filtering
   // the limited client-side list (which is capped at 100/200 most recent).
@@ -502,7 +516,7 @@ export function OrdersTab({ orders, onRefresh, holidays, offDays, userZones, onV
         </div>
       )}
       <div className="flex-1 min-h-0 overflow-y-auto stagger-fade">
-        {sorted.map(o => <OrderCard key={o.id} order={o} onRefresh={onRefresh} onStatusChange={handleOrderStatusChange} holidays={holidays} offDays={offDays} isAdminView={showAllOrders && isSupportOrAdmin} heroes={showAllOrders && isSupportOrAdmin ? heroes : undefined} onReassign={showAllOrders && isSupportOrAdmin ? handleReassign : undefined} userZones={userZones} disabledZones={disabledZones} selected={selectMode ? selectedIds.has(o.id) : undefined} onToggleSelect={selectMode ? () => toggleSelectOrder(o.id) : undefined} onShowTimeline={() => setTimelineOrder(o)} />)}
+        {sorted.map(o => <OrderCard key={o.id} order={o} onRefresh={onRefresh} onStatusChange={handleOrderStatusChange} onDateChange={handleOrderDateChange} holidays={holidays} offDays={offDays} isAdminView={showAllOrders && isSupportOrAdmin} heroes={showAllOrders && isSupportOrAdmin ? heroes : undefined} onReassign={showAllOrders && isSupportOrAdmin ? handleReassign : undefined} userZones={userZones} disabledZones={disabledZones} selected={selectMode ? selectedIds.has(o.id) : undefined} onToggleSelect={selectMode ? () => toggleSelectOrder(o.id) : undefined} onShowTimeline={() => setTimelineOrder(o)} />)}
         {filtered.length === 0 && (
           <div className="text-center py-16 px-6">
             <svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg" className="mx-auto mb-5 opacity-70">

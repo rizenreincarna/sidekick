@@ -68,3 +68,28 @@ LIVE VERIFY (admin):
 - UI: Latest-created-first top = ERTHBOX-023,022,021,26306... screenshot taken.
 - tsc clean; vitest 12/12 order-sort (added epoch regression), full 127/127.
 STATUS: DONE.
+
+## Loop 3 — Reschedule-save feels sluggish
+ROOT CAUSE (measured): server PATCH is fast (~50-97ms). The lag is CLIENT:
+  changeDate awaited PATCH, kept dialog OPEN, then onRefresh() -> 300ms debounce ->
+  refetch orders(197KB)+stats+holidays+dashboardRefreshKey++ (admin re-runs
+  /api/stats/admin) -> re-render hundreds of OrderCards + dashboard; each refetch
+  also did a SYNCHRONOUS localStorage.setItem(197KB JSON) on the main thread
+  (blocked paint). Dialog closed only in `finally` after all that -> felt slow.
+FIX (deployed):
+  1. order-card.tsx: optimistic scheduledDate (mirrors existing optimistic status).
+     changeDate now closes the dialog + shows the new date INSTANTLY, fires PATCH
+     in background, reverts only on server rejection. New onDateChange prop.
+  2. orders-tab.tsx: handleOrderDateChange updates statusFilteredOrders/allOrders
+     optimistically; drops from view only if an active date filter no longer matches.
+  3. use-fetch-data.ts: localStorage cache write moved off the critical path via
+     requestIdleCallback (was blocking paint on every refresh).
+VERIFY:
+  - Measured: dialog closes in 17ms after clicking Reschedule (was: full cascade).
+  - tsc clean; vitest 129/129. Build 21:13 > source 21:05; requestIdleCallback
+    confirmed in client chunk. Prod 200.
+  - Data integrity: 301 orders intact; no stray test rows persisted.
+  - Note: browser-tool couldn't re-drive the Radix SPA reliably for a 2nd capture
+    (untrusted events ignored by Tabs/Switch); the 17ms close is the authoritative
+    signal and the code path is verified in source + bundle.
+STATUS: DONE.

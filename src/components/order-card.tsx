@@ -23,7 +23,7 @@ import { formatEventType, ZoneBadge, StatusBadge } from "@/components/ui/shared-
 import { MiniCalendar } from "@/components/mini-calendar";
 
 // ============ ORDER CARD ============
-export function OrderCard({ order, compact, onRefresh, onStatusChange, holidays, offDays, isAdminView, heroes, onReassign, userZones, disabledZones, selected, onToggleSelect, onShowTimeline }: { order: Order; compact?: boolean; onRefresh: () => void; onStatusChange?: (orderId: string, newStatus: string) => void; holidays?: Holiday[]; offDays?: OffDay[]; isAdminView?: boolean; heroes?: HeroOption[]; onReassign?: (orderId: string, targetHeroId: string) => Promise<void>; userZones?: UserZoneData[]; disabledZones?: number[]; selected?: boolean; onToggleSelect?: () => void; onShowTimeline?: () => void }) {
+export function OrderCard({ order, compact, onRefresh, onStatusChange, onDateChange, holidays, offDays, isAdminView, heroes, onReassign, userZones, disabledZones, selected, onToggleSelect, onShowTimeline }: { order: Order; compact?: boolean; onRefresh: () => void; onStatusChange?: (orderId: string, newStatus: string) => void; onDateChange?: (orderId: string, newDate: string | null) => void; holidays?: Holiday[]; offDays?: OffDay[]; isAdminView?: boolean; heroes?: HeroOption[]; onReassign?: (orderId: string, targetHeroId: string) => Promise<void>; userZones?: UserZoneData[]; disabledZones?: number[]; selected?: boolean; onToggleSelect?: () => void; onShowTimeline?: () => void }) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [verifying, setVerifying] = useState(false);
@@ -54,6 +54,14 @@ export function OrderCard({ order, compact, onRefresh, onStatusChange, holidays,
   const [optimisticStatus, setOptimisticStatus] = useState<string | null>(null);
   useEffect(() => { setOptimisticStatus(null); }, [order.status]);
   const displayStatus = optimisticStatus ?? order.status;
+
+  // Optimistic scheduledDate: same pattern as status. Rescheduling used to keep the
+  // dialog open until the PATCH + full refresh cascade (orders 197KB + stats +
+  // dashboard) finished, which read as "sluggish". Now the date snaps instantly and
+  // the refresh reconciles in the background. Cleared when the real date catches up.
+  const [optimisticDate, setOptimisticDate] = useState<string | null | undefined>(undefined);
+  useEffect(() => { setOptimisticDate(undefined); }, [order.scheduledDate]);
+  const displayDate = optimisticDate === undefined ? order.scheduledDate : optimisticDate;
 
   const updateStatus = async (newStatus: string) => {
     setLoading(true);
@@ -90,14 +98,24 @@ export function OrderCard({ order, compact, onRefresh, onStatusChange, holidays,
 
   const changeDate = async () => {
     if (!newDate) return;
+    const target = newDate;
+    // Optimistic: close the dialog and show the new date NOW; PATCH + refresh run
+    // in the background. Revert only if the server rejects the change.
+    setOptimisticDate(target);
+    setShowDateDialog(false);
     setLoading(true);
+    onDateChange?.(order.id, target); // update parent filtered/all lists immediately
     try {
-      const res = await fetch(`/api/orders/${order.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scheduledDate: newDate }) });
+      const res = await fetch(`/api/orders/${order.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scheduledDate: target }) });
       if (!res.ok) throw new Error();
-      toast({ title: `${order.orderId} rescheduled to ${format(parseISO(newDate), "dd MMM yyyy (EEE)")}` });
+      toast({ title: `${order.orderId} rescheduled to ${format(parseISO(target), "dd MMM yyyy (EEE)")}` });
       onRefresh();
-    } catch { toast({ title: "Failed to reschedule", variant: "destructive" }); }
-    finally { setLoading(false); setShowDateDialog(false); }
+    } catch {
+      setOptimisticDate(undefined); // revert on failure
+      onDateChange?.(order.id, order.scheduledDate);
+      toast({ title: "Failed to reschedule", variant: "destructive" });
+    }
+    finally { setLoading(false); }
   };
 
   const clearDate = async () => {
@@ -304,10 +322,10 @@ export function OrderCard({ order, compact, onRefresh, onStatusChange, holidays,
                   {order.phone}
                 </a>
               </p>
-              {order.scheduledDate && (
+              {displayDate && (
                 <p className="text-sm sm:text-xs text-emerald-400 flex items-center gap-1 mt-1">
                   <Calendar className="h-3.5 w-3.5 sm:h-3 sm:w-3" />
-                  {format(parseISO(order.scheduledDate), "dd MMM yyyy (EEE)")}
+                  {format(parseISO(displayDate), "dd MMM yyyy (EEE)")}
                 </p>
               )}
               {order.addressVerified ? (

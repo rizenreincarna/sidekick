@@ -39,8 +39,16 @@ export function useFetchData<T>(url: string) {
         if (cancelled) return;
         setData(d);
         setError(null);
-        // Persist to cache so the next mount paints instantly.
-        try { localStorage.setItem(cacheKey, JSON.stringify(d)); } catch { /* quota */ }
+        // Persist to cache so the next mount paints instantly. Writing the (large,
+        // e.g. 197KB orders) JSON synchronously on the main thread blocks paint and
+        // makes every mutation's refresh feel sluggish — defer it to an idle slice
+        // so the UI updates first.
+        const writeCache = () => { try { localStorage.setItem(cacheKey, JSON.stringify(d)); } catch { /* quota */ } };
+        if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+          (window as any).requestIdleCallback(writeCache, { timeout: 2000 });
+        } else {
+          setTimeout(writeCache, 0);
+        }
       })
       .catch(e => { if (!cancelled) setError(e.message); })
       .finally(() => {
