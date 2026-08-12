@@ -1,0 +1,20 @@
+[
+  {
+    "type": "payment",
+    "amount": 10,
+    "note": "26271 - Puchong 2026-08-12",
+    "seq": 1
+  },
+  {
+    "type": "payment",
+    "amount": 100,
+    "note": "26269 - Shah Alam 2026-08-12",
+    "seq": 2
+  },
+  {
+    "type": "payment",
+    "amount": 45,
+    "note": "26258 - PJ 2026-08-12",
+    "seq": 3
+  }
+]
