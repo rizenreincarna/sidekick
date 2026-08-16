@@ -1,0 +1,26 @@
+[
+  {
+    "type": "payment",
+    "amount": 0,
+    "note": "26253 - Melawati 2026-08-16",
+    "seq": 1
+  },
+  {
+    "type": "payment",
+    "amount": 5,
+    "note": "26392 - Kajang 2026-08-16",
+    "seq": 2
+  },
+  {
+    "type": "payment",
+    "amount": 38,
+    "note": "26261 - Kajang 2026-08-16",
+    "seq": 3
+  },
+  {
+    "type": "payment",
+    "amount": 15,
+    "note": "26381 - Semenyih 2026-08-16",
+    "seq": 4
+  }
+]
