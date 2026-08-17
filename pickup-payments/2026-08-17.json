@@ -1,0 +1,38 @@
+[
+  {
+    "type": "payment",
+    "amount": 20,
+    "note": "26396 - Shah Alam 2026-08-17",
+    "seq": 1
+  },
+  {
+    "type": "received",
+    "amount": 35,
+    "note": "26395 - PJ Ara Damansara pickup fee RM35 (deducted by boss)",
+    "seq": 2
+  },
+  {
+    "type": "payment",
+    "amount": 187,
+    "note": "26378 - PJ Seksyen 6 XL business 2026-08-17",
+    "seq": 3
+  },
+  {
+    "type": "payment",
+    "amount": 7,
+    "note": "26298 - Puchong Kinrara 5 2026-08-17",
+    "seq": 4
+  },
+  {
+    "type": "payment",
+    "amount": 32,
+    "note": "26397 - Subang Jaya Goodyear 2026-08-17",
+    "seq": 5
+  },
+  {
+    "type": "payment",
+    "amount": 175,
+    "note": "26299 - Puchong Bandar Puteri XL 2026-08-17",
+    "seq": 6
+  }
+]
