@@ -1,0 +1,44 @@
+[
+  {
+    "type": "payment",
+    "amount": 25,
+    "note": "26302 - Subang Jaya 2026-08-18",
+    "seq": 1
+  },
+  {
+    "type": "payment",
+    "amount": 31,
+    "note": "26418 - PJ Ara Greens 2026-08-18",
+    "seq": 2
+  },
+  {
+    "type": "payment",
+    "amount": 15,
+    "note": "26297 - Shah Alam 2026-08-18",
+    "seq": 3
+  },
+  {
+    "type": "payment",
+    "amount": 92,
+    "note": "26288 - Mont Kiara Astana 2026-08-18",
+    "seq": 4
+  },
+  {
+    "type": "payment",
+    "amount": 118,
+    "note": "26376 - Mont Kiara school XL 2026-08-18",
+    "seq": 5
+  },
+  {
+    "type": "payment",
+    "amount": 10,
+    "note": "26301 - PJ Kota Damansara 2026-08-18",
+    "seq": 6
+  },
+  {
+    "type": "received",
+    "amount": 35,
+    "note": "26301 - PJ Kota Damansara fee 2026-08-18",
+    "seq": 7
+  }
+]
