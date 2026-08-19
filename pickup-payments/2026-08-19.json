@@ -1,0 +1,32 @@
+[
+  {
+    "type": "payment",
+    "amount": 25,
+    "note": "26199 - KL Pantai Sentral 2026-08-19",
+    "seq": 1
+  },
+  {
+    "type": "payment",
+    "amount": 60,
+    "note": "26386 - KL Sentul 2026-08-19",
+    "seq": 2
+  },
+  {
+    "type": "payment",
+    "amount": 101,
+    "note": "26292 - Ampang Jaya 2026-08-19",
+    "seq": 3
+  },
+  {
+    "type": "payment",
+    "amount": 123,
+    "note": "26414 - Ampang Kemensah XL 2026-08-19",
+    "seq": 4
+  },
+  {
+    "type": "payment",
+    "amount": 35,
+    "note": "26415 - Midah Heights 2026-08-19",
+    "seq": 5
+  }
+]
